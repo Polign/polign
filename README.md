@@ -14,11 +14,19 @@ macOS (Homebrew):
 brew install polign/tap/polign
 ```
 
-Linux / manual (static binaries, no dependencies):
+Linux and macOS (static binaries, no dependencies):
 
 ```sh
-V=v0.1.0; OS=$(uname -s | tr A-Z a-z); ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
-curl -fsSL "https://github.com/Polign/polign/releases/download/$V/polign_db_${OS}_${ARCH}.tar.gz" | tar -xz
+curl -fsSL https://get.polign.com | sh
+```
+
+The script picks the build for your OS and architecture, checks the archive
+against the release `checksums.txt`, and installs to `/usr/local/bin` when that
+is writable and `~/.local/bin` otherwise. Set `POLIGN_VERSION` to pin a release
+and `POLIGN_BIN_DIR` to choose where the binaries land:
+
+```sh
+curl -fsSL https://get.polign.com | POLIGN_VERSION=v0.2.2 sh
 ```
 
 Each archive ships five binaries: `polign` (CLI), `polign-server`,
