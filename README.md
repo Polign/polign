@@ -22,15 +22,34 @@ curl -fsSL https://get.polign.com | sh
 
 The script picks the build for your OS and architecture, checks the archive
 against the release `checksums.txt`, and installs to `/usr/local/bin` when that
-is writable and `~/.local/bin` otherwise. Set `POLIGN_VERSION` to pin a release
-and `POLIGN_BIN_DIR` to choose where the binaries land:
+is writable and `~/.local/bin` otherwise. With no version set it installs the
+latest stable release. Set `POLIGN_VERSION` to pin one, and `POLIGN_BIN_DIR` to
+choose where the binaries land:
 
 ```sh
-curl -fsSL https://get.polign.com | POLIGN_VERSION=v0.2.2 sh
+# replace vX.Y.Z with a tag from the releases page
+curl -fsSL https://get.polign.com | POLIGN_VERSION=vX.Y.Z sh
 ```
 
-Each archive ships five binaries: `polign` (CLI), `polign-server`,
-`polign-persistor`, `polign-apikey`, and `polign-maintain`.
+Release tags are listed at
+[github.com/Polign/polign/releases](https://github.com/Polign/polign/releases),
+and `https://dl.polign.com/latest/version` prints the latest stable tag if you
+need to resolve it in a script.
+
+To download an archive yourself instead of running the script, fetch it from
+`dl.polign.com`, which always redirects to the latest stable release:
+
+```sh
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+curl -fsSL "https://dl.polign.com/latest/polign_db_${OS}_${ARCH}.tar.gz" | tar -xz
+```
+
+Swap `latest` for a tag to pin. Or grab the archive by hand from the
+[latest release page](https://github.com/Polign/polign/releases/latest).
+
+Each archive ships six binaries: `polign` (CLI), `polign-server`,
+`polign-persistor`, `polign-apikey`, `polign-maintain`, and `polign-import`.
 
 ## Quick start
 
