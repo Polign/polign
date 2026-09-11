@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "langchain-polign"
+version = "0.1.0"
+description = "LangChain vector store for polign_db"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "Polign" }]
+keywords = ["langchain", "vector database", "vector store", "embeddings", "polign"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: Apache Software License",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "langchain-core>=1.0,<2",
+    "polign>=0.7.0",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+grpc = ["polign[grpc]>=0.7.0"]
+
+[project.urls]
+Homepage = "https://polign.com"
+Documentation = "https://polign.com/python.html"
+Repository = "https://github.com/Polign/polign"
+Issues = "https://github.com/Polign/polign/issues"
+
+[tool.hatch.build]
+ignore-vcs = true
+
+[tool.hatch.build.targets.sdist]
+include = ["langchain_polign/", "tests/", "README.md", "LICENSE"]
+exclude = ["**/__pycache__", "**/.pytest_cache"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["langchain_polign"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

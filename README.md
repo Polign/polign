@@ -86,8 +86,27 @@ for hit in client.search("docs", values=query_embedding, k=10):
 
 Source, tests, and the full operations reference live in [python/](python/).
 The gRPC wire contract is [proto/vectordb.proto](proto/vectordb.proto).
-Framework integrations (LangChain, LlamaIndex) will be built in this
-repository on top of the client.
+
+### LangChain
+
+`langchain-polign` provides `PolignVectorStore`, a LangChain vector store
+over one collection, with metadata filters, relevance scores, MMR, and
+lexical or hybrid search on servers with a segment store.
+
+```sh
+pip install langchain-polign
+```
+
+```python
+from langchain_polign import PolignVectorStore
+
+store = PolignVectorStore(embedding=embeddings, collection="docs", url="http://localhost:23000")
+store.add_texts(["cats purr", "dogs bark"], metadatas=[{"lang": "en"}] * 2)
+store.similarity_search("purring", k=1, filter={"lang": "en"})
+```
+
+See [python/langchain-polign/](python/langchain-polign/) for how documents
+are stored and the full API.
 
 ## License
 

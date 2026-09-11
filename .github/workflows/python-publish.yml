@@ -1,8 +1,10 @@
 name: python-publish
 
-# Publishes the `polign` package to PyPI on tags shaped `python/vX.Y.Z`.
+# Publishes the Python packages to PyPI:
+#   python/vX.Y.Z     -> the `polign` client   (python/)
+#   langchain/vX.Y.Z  -> `langchain-polign`     (python/langchain-polign/)
 # Server releases use bare `vX.Y.Z` tags created by the release pipeline in
-# the private source repository; the prefix keeps the two tag lines apart.
+# the private source repository; the prefixes keep the tag lines apart.
 #
 # Authentication is PyPI trusted publishing: the PyPI project trusts this
 # repository, this workflow file, and the `pypi` GitHub environment, so no
@@ -10,7 +12,7 @@ name: python-publish
 
 on:
   push:
-    tags: ["python/v*"]
+    tags: ["python/v*", "langchain/v*"]
 
 permissions:
   contents: read
@@ -29,37 +31,49 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Resolve the package from the tag prefix
+        run: |
+          case "$GITHUB_REF_NAME" in
+            python/v*)    echo "PKG_DIR=python" >> "$GITHUB_ENV"
+                          echo "PKG_VERSION=${GITHUB_REF_NAME#python/v}" >> "$GITHUB_ENV"
+                          echo "PKG_INIT=polign/__init__.py" >> "$GITHUB_ENV"
+                          echo "PKG_MARKER=polign/client.py" >> "$GITHUB_ENV" ;;
+            langchain/v*) echo "PKG_DIR=python/langchain-polign" >> "$GITHUB_ENV"
+                          echo "PKG_VERSION=${GITHUB_REF_NAME#langchain/v}" >> "$GITHUB_ENV"
+                          echo "PKG_INIT=langchain_polign/__init__.py" >> "$GITHUB_ENV"
+                          echo "PKG_MARKER=langchain_polign/vectorstores.py" >> "$GITHUB_ENV" ;;
+            *)            echo "::error::unexpected tag ${GITHUB_REF_NAME}"; exit 1 ;;
+          esac
+
       # The package version is bumped by hand in two places; make a mismatch
       # with the tag fail here instead of publishing a stray version.
       - name: Check the package version matches the tag
-        working-directory: python
         run: |
-          tag="${GITHUB_REF_NAME#python/v}"
+          cd "$PKG_DIR"
           pkg="$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)"
-          if [ "$tag" != "$pkg" ]; then
-            echo "::error::tag ${GITHUB_REF_NAME} implies version ${tag}, but python/pyproject.toml says ${pkg}"
+          if [ "$PKG_VERSION" != "$pkg" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} implies version ${PKG_VERSION}, but ${PKG_DIR}/pyproject.toml says ${pkg}"
             exit 1
           fi
-          fallback="$(grep -m1 '^    __version__ = "' polign/__init__.py | cut -d'"' -f2)"
-          if [ "$tag" != "$fallback" ]; then
-            echo "::error::polign/__init__.py fallback __version__ is ${fallback}, expected ${tag}"
+          fallback="$(grep -m1 '^    __version__ = "' "$PKG_INIT" | cut -d'"' -f2)"
+          if [ "$PKG_VERSION" != "$fallback" ]; then
+            echo "::error::${PKG_INIT} fallback __version__ is ${fallback}, expected ${PKG_VERSION}"
             exit 1
           fi
 
       - name: Build sdist and wheel
-        working-directory: python
         run: |
+          cd "$PKG_DIR"
           python -m pip install build
           python -m build
 
       - name: Check the wheel is not empty
-        working-directory: python
-        run: python -m zipfile -l dist/*.whl | grep -q 'polign/client.py'
+        run: cd "$PKG_DIR" && python -m zipfile -l dist/*.whl | grep -q "$PKG_MARKER"
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: python/dist
+          packages-dir: ${{ env.PKG_DIR }}/dist
           # PyPI uploads are immutable; a re-run of an already published
           # version is left alone instead of failing the job.
           skip-existing: true
