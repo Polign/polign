@@ -1,0 +1,38 @@
+---
+title: "Polign integrations"
+description: "Integrate with Polign using LangChain Python."
+---
+
+>[Polign](https://polign.com) is an object-store-native vector database: one
+> static binary that keeps its durable state in your own bucket and serves
+> vector, BM25, and hybrid search over it.
+
+## Installation and setup
+
+Install the Python partner package:
+
+<CodeGroup>
+```bash pip
+pip install langchain-polign
+```
+
+```bash uv
+uv add langchain-polign
+```
+</CodeGroup>
+
+Run a server locally with `brew install polign/tap/polign` or the install
+script at `https://get.polign.com`, then `polign-server -store fs:/var/lib/polign`.
+See the [Polign docs](https://polign.com/developers.html).
+
+## Vector store
+
+`PolignVectorStore` wraps one Polign collection as a LangChain vector store,
+with metadata filters, relevance scores, MMR, and lexical or hybrid search on
+servers with a segment store.
+
+```python
+from langchain_polign import PolignVectorStore
+```
+
+For a more detailed walkthrough, see the [vector store page](/oss/integrations/vectorstores/polign).

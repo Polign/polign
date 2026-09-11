@@ -1,0 +1,243 @@
+---
+title: Polign integration
+description: Integrate with the Polign vector store using LangChain Python.
+integration:
+  name: PolignVectorStore
+  pypi: langchain-polign
+  delete_by_id: true
+  filtering: true
+  search_by_vector: true
+  search_with_score: true
+  async_api: true
+  passes_standard_tests: true
+  multi_tenancy: false
+  ids_in_add_documents: true
+---
+
+>[Polign](https://polign.com) is an object-store-native vector database: one static binary that keeps its durable state in your own bucket and serves vector, BM25, and hybrid search over it.
+
+This guide provides a quick overview for getting started with the Polign [vector store](/oss/integrations/vectorstores#overview). For details on how documents are stored and the full API, see the [`langchain-polign` README](https://github.com/Polign/polign/tree/main/python/langchain-polign).
+
+## Setup
+
+To use the Polign vector store, you need a running `polign-server` and the `langchain-polign` integration package.
+
+Start a server locally with Homebrew or the install script:
+
+```bash
+brew install polign/tap/polign          # macOS
+curl -fsSL https://get.polign.com | sh  # Linux and macOS
+
+polign-server -store fs:/var/lib/polign  # or -store s3://your-bucket/prefix
+```
+
+The server listens on `http://localhost:23000`. See the [Polign docs](https://polign.com/developers.html) for bucket-backed deployments.
+
+### Credentials
+
+No credentials are needed for a local server. When a server is started with `-require-data-key`, pass its API key as `api_key=`:
+
+```python
+import getpass
+import os
+
+if "POLIGN_API_KEY" not in os.environ:
+    os.environ["POLIGN_API_KEY"] = getpass.getpass("Enter your Polign API key (blank for none): ")
+```
+
+To enable automated tracing of your model calls, set your [LangSmith](/langsmith/observability) API key:
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+### Installation
+
+The LangChain Polign integration lives in the `langchain-polign` package:
+
+<CodeGroup>
+    ```python pip
+    pip install -U langchain-polign
+    ```
+    ```python uv
+    uv add langchain-polign
+    ```
+</CodeGroup>
+
+## Instantiation
+
+<EmbeddingTabs/>
+
+```python
+# | output: false
+# | echo: false
+from langchain_openai import OpenAIEmbeddings
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+```
+
+```python
+from langchain_polign import PolignVectorStore
+
+vector_store = PolignVectorStore(
+    embedding=embeddings,
+    collection="langchain_docs",
+    url="http://localhost:23000",
+    api_key=os.environ.get("POLIGN_API_KEY") or None,
+)
+```
+
+The collection is created on the first write and takes its dimension from the first vector.
+
+## Manage vector store
+
+### Add items to vector store
+
+```python
+from uuid import uuid4
+
+from langchain_core.documents import Document
+
+document_1 = Document(
+    page_content="I had chocolate chip pancakes and scrambled eggs for breakfast this morning.",
+    metadata={"source": "tweet"},
+)
+
+document_2 = Document(
+    page_content="The weather forecast for tomorrow is cloudy and overcast, with a high of 62 degrees.",
+    metadata={"source": "news"},
+)
+
+document_3 = Document(
+    page_content="Building an exciting new project with LangChain - come check it out!",
+    metadata={"source": "tweet"},
+)
+
+document_4 = Document(
+    page_content="Robbers broke into the city bank and stole $1 million in cash.",
+    metadata={"source": "news"},
+)
+
+document_5 = Document(
+    page_content="Wow! That was an amazing movie. I can't wait to see it again.",
+    metadata={"source": "tweet"},
+)
+
+documents = [document_1, document_2, document_3, document_4, document_5]
+uuids = [str(uuid4()) for _ in range(len(documents))]
+
+vector_store.add_documents(documents=documents, ids=uuids)
+```
+
+### Update items in vector store
+
+Adding a document with an existing ID replaces it:
+
+```python
+updated_document = Document(
+    page_content="I had waffles and orange juice for breakfast this morning.",
+    metadata={"source": "tweet"},
+)
+
+vector_store.add_documents(documents=[updated_document], ids=[uuids[0]])
+```
+
+### Delete items from vector store
+
+```python
+vector_store.delete(ids=[uuids[-1]])
+```
+
+Delete by metadata instead:
+
+```python
+vector_store.delete(filter={"source": "news"})
+```
+
+## Query vector store
+
+Once your vector store has been created and the relevant documents have been added you will most likely wish to query it during the running of your chain or agent.
+
+### Query directly
+
+Performing a simple similarity search can be done as follows:
+
+```python
+results = vector_store.similarity_search(
+    "LangChain provides abstractions to make working with LLMs easy",
+    k=2,
+    filter={"source": "tweet"},
+)
+for res in results:
+    print(f"* {res.page_content} [{res.metadata}]")
+```
+
+#### Similarity search with score
+
+`similarity_search_with_score` returns the collection distance; lower means more similar. `similarity_search_with_relevance_scores` maps it to a score in `[0, 1]`:
+
+```python
+results = vector_store.similarity_search_with_score(
+    "Will it be hot tomorrow?", k=1, filter={"source": "news"}
+)
+for res, score in results:
+    print(f"* [DIST={score:3f}] {res.page_content} [{res.metadata}]")
+```
+
+### Query by turning into retriever
+
+You can also transform the vector store into a retriever for easier usage in your chains.
+
+```python
+retriever = vector_store.as_retriever(
+    search_type="mmr",
+    search_kwargs={"k": 1, "fetch_k": 5},
+)
+retriever.invoke("Stealing from the bank is a crime")
+```
+
+## Filtering
+
+`filter` on every search method is Polign's metadata predicate language. A plain mapping is equality ANDed across keys; per-key operators (`$eq`, `$ne`, `$in`, `$gt`, `$gte`, `$lt`, `$lte`, `$exists`) and the composers `$and`, `$or`, and `$not` express richer predicates:
+
+```python
+results = vector_store.similarity_search(
+    "interesting articles",
+    k=2,
+    filter={
+        "source": {"$in": ["tweet", "website"]},
+        "$or": [{"lang": "en"}, {"lang": {"$exists": False}}],
+    },
+)
+```
+
+Metadata values that are strings, numbers, booleans, or flat lists of those are stored as typed values and can be filtered on. Nested objects and `None` are JSON-encoded on write and restored on read, but cannot be filtered on.
+
+## Lexical and hybrid search
+
+On a server started with a segment store (`polign-server -store ...`), the `text` field that holds `page_content` is also indexed for BM25. Two extra methods use it; both return `(document, score)` pairs where a larger score is better:
+
+```python
+vector_store.lexical_search("chocolate pancakes", k=2)           # BM25 only
+vector_store.hybrid_search("chocolate pancakes", k=2, alpha=0.6)  # vector + BM25, linear fusion
+vector_store.hybrid_search("chocolate pancakes", k=2)             # reciprocal rank fusion
+```
+
+Records become lexically searchable once the server has written them to a segment, about half a minute after the write with default settings. Vector search sees writes immediately.
+
+## Usage for retrieval-augmented generation
+
+For guides on how to use this vector store for retrieval-augmented generation (RAG), see the following sections:
+
+- [RAG guide](/oss/deepagents/rag)
+- [Retrieval conceptual docs](/oss/deepagents/retrieval)
+- [Agentic RAG tutorial](/oss/langgraph/agentic-rag)
+
+## API reference
+
+For detailed documentation of all `PolignVectorStore` features and configurations, head to the [`langchain-polign` README](https://github.com/Polign/polign/tree/main/python/langchain-polign) and the [Polign Python client guide](https://polign.com/python.html).
+
+## Related
+
+- Vector store [conceptual guide](/oss/integrations/vectorstores)
