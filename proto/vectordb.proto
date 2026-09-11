@@ -1,0 +1,403 @@
+syntax = "proto3";
+
+package polign.v1;
+
+option go_package = "github.com/Polign/polign_db/internal/pb;pb";
+
+// VectorDB exposes CRUD plus similarity search over named collections of
+// vectors. PutVector auto-creates a collection (inferring its dimension from
+// the first vector) when one does not already exist.
+service VectorDB {
+  rpc PutVector(PutVectorRequest) returns (PutVectorResponse);
+  rpc PutVectors(PutVectorsRequest) returns (PutVectorsResponse);
+  rpc GetVector(GetVectorRequest) returns (GetVectorResponse);
+  rpc GetVectors(GetVectorsRequest) returns (GetVectorsResponse);
+  rpc ListVectors(ListVectorsRequest) returns (ListVectorsResponse);
+  rpc DeleteVector(DeleteVectorRequest) returns (DeleteVectorResponse);
+  rpc DeleteVectors(DeleteVectorsRequest) returns (DeleteVectorsResponse);
+  rpc UpdateMetadata(UpdateMetadataRequest) returns (UpdateMetadataResponse);
+  rpc SearchVectors(SearchVectorsRequest) returns (SearchVectorsResponse);
+  rpc DescribeCollection(DescribeCollectionRequest) returns (DescribeCollectionResponse);
+
+  // Collection admin: the explicit lifecycle for collections on
+  // customer-owned backends (bring-your-own bucket). Available only when the
+  // server runs the collections registry (-byo-store); otherwise these
+  // return Unimplemented. Collections on the server's default store need
+  // none of this and keep auto-creating on first write.
+  rpc CreateCollection(CreateCollectionRequest) returns (CreateCollectionResponse);
+  rpc GetCollection(GetCollectionRequest) returns (GetCollectionResponse);
+  rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse);
+  rpc DeleteCollection(DeleteCollectionRequest) returns (DeleteCollectionResponse);
+  rpc VerifyCollection(VerifyCollectionRequest) returns (VerifyCollectionResponse);
+}
+
+// CollectionBackend says where a collection's data lives and the principal
+// the fleet reaches it as. It never carries long-lived customer secrets.
+message CollectionBackend {
+  // One store URI, e.g. "s3://cust-bkt/polign" or "gcs://cust-bkt/polign".
+  string uri = 1;
+  // IAM role the fleet assumes for this bucket, with the external id sent on
+  // AssumeRole (the confused-deputy guard).
+  string role_arn = 2;
+  string external_id = 3;
+  // Bucket region, when it differs from the fleet's.
+  string region = 4;
+  // GCS impersonation target (the gcs:// analogue of role_arn).
+  string gcs_service_account = 5;
+}
+
+// CollectionInfo describes a registered collection. claim_token is set only
+// on the create response and is never stored or shown again.
+message CollectionInfo {
+  string name = 1;
+  // "pending" | "active" | "disabled" | "degraded".
+  string status = 2;
+  CollectionBackend backend = 3;
+  string backend_id = 4;
+  repeated string verified_capabilities = 5;
+  int64 created_at_unix = 6;
+  int64 verified_at_unix = 7; // 0 when not verified
+  string claim_token = 8;
+  // Where in the bucket to write claim_token (relative to the URI's prefix).
+  string claim_path = 9;
+  // Non-fatal advisories from create/verify (e.g. the bucket region differs
+  // from the fleet's, which costs cross-region latency and egress).
+  repeated string warnings = 10;
+}
+
+message CreateCollectionRequest {
+  string collection = 1;
+  CollectionBackend backend = 2;
+}
+
+message CreateCollectionResponse {
+  CollectionInfo info = 1;
+}
+
+message GetCollectionRequest {
+  string collection = 1;
+}
+
+message GetCollectionResponse {
+  CollectionInfo info = 1;
+}
+
+message ListCollectionsRequest {}
+
+message ListCollectionsResponse {
+  repeated CollectionInfo collections = 1;
+}
+
+message DeleteCollectionRequest {
+  // Deletion permanently disables and reserves this name. It does not erase
+  // the customer bucket, and a later create cannot bind the name again.
+  string collection = 1;
+}
+
+message DeleteCollectionResponse {
+  bool deleted = 1;
+}
+
+message VerifyCollectionRequest {
+  string collection = 1;
+}
+
+message VerifyCollectionResponse {
+  CollectionInfo info = 1;
+}
+
+// TypedValue is one typed metadata value: a string, a number, a boolean, or a
+// list of those scalars.
+message TypedValue {
+  oneof value {
+    string str = 1;
+    double number = 2;
+    bool boolean = 3;
+    // A list value. Elements must be scalars: a nested list is rejected with
+    // INVALID_ARGUMENT. A positive filter condition on a list-valued key
+    // matches when any element matches.
+    TypedValueList list = 4;
+  }
+}
+
+// Vector is a stored embedding with its id and optional metadata.
+//
+// Metadata travels in one of two fields. `metadata` is the original
+// string-only map and always works. `typed_metadata` carries typed scalars;
+// when set on a write it wins over `metadata`. On reads the server always
+// fills `metadata` with every value's canonical string form (so clients that
+// predate typed metadata keep working), and additionally fills
+// `typed_metadata` when the record holds at least one non-string value.
+// Clients that understand it should prefer it when present.
+message Vector {
+  string id = 1;
+  repeated float values = 2;
+  map<string, string> metadata = 3;
+  map<string, TypedValue> typed_metadata = 4;
+}
+
+message PutVectorRequest {
+  string collection = 1;
+  Vector vector = 2;
+}
+
+message PutVectorResponse {
+  string id = 1;
+}
+
+// PutVectorsRequest upserts a batch of vectors in one call. Every vector needs
+// an id, non-empty values, and the same dimension, and a batch holds at most
+// 5000 vectors (chunk larger loads); the whole batch is rejected
+// (InvalidArgument, nothing applied) if any entry fails validation. The batch
+// is not atomic beyond that: on a mid-batch failure (e.g. a write-log error)
+// vectors before the failing one remain applied. After an ambiguous failure,
+// reconcile stored state before deciding whether to retry: replaying an old
+// upsert can overwrite a newer concurrent update.
+message PutVectorsRequest {
+  string collection = 1;
+  repeated Vector vectors = 2;
+}
+
+message PutVectorsResponse {
+  // Ids of the stored vectors, in request order.
+  repeated string ids = 1;
+}
+
+message GetVectorRequest {
+  string collection = 1;
+  string id = 2;
+}
+
+message GetVectorResponse {
+  Vector vector = 1;
+}
+
+// GetVectorsRequest reads a batch of vectors by id with the byte-exact
+// contract: returned values are exactly the floats that were written, never a
+// compressed reconstruction. On a cold-flushed collection the server reads
+// them back from object storage. A batch holds at most 5000 ids. Contrast
+// GetVector, which serves from the index's RAM state and may return a
+// reconstruction on a compressed collection.
+message GetVectorsRequest {
+  string collection = 1;
+  repeated string ids = 2;
+}
+
+message GetVectorsResponse {
+  // Found vectors in request id order. Unknown ids are omitted, so the
+  // response may hold fewer entries than the request; absence is not an error.
+  repeated Vector vectors = 1;
+}
+
+message ListVectorsRequest {
+  string collection = 1;
+  // Maximum number of vectors to return. 0 means "server default".
+  int32 limit = 2;
+  // Number of vectors to skip, for pagination. Results are ordered by id.
+  int32 offset = 3;
+  // FilterExpr restricts the listing to records whose metadata matches the
+  // predicate, the same filter language as SearchVectorsRequest.filter_expr.
+  // Absent means every record. With a filter, offset/total count matching
+  // records only, so pagination works unchanged.
+  FilterExpr filter_expr = 4;
+}
+
+message ListVectorsResponse {
+  repeated Vector vectors = 1;
+  // Total number of live vectors that match the filter (all live vectors when
+  // unfiltered), ignoring limit/offset.
+  int32 total = 2;
+}
+
+message DeleteVectorRequest {
+  string collection = 1;
+  string id = 2;
+}
+
+message DeleteVectorResponse {
+  // True when the delete was durably recorded. On a cold-only collection the
+  // server may not be able to point-check persisted ids, so an absent id can be
+  // reported optimistically; replaying that delete remains a no-op.
+  bool deleted = 1;
+}
+
+// UpdateMetadata applies one metadata patch to a batch of records without
+// resending their vectors: keys in set are written, keys in unset removed,
+// every other key keeps its value. Ids that do not exist are omitted from the
+// response. The patch resolves against each record's current state on the
+// server, so a cold-served collection must be point-readable (its segments
+// carry id filters); one that is not fails with UNIMPLEMENTED.
+message UpdateMetadataRequest {
+  string collection = 1;
+  repeated string ids = 2;
+  map<string, TypedValue> set = 3;
+  repeated string unset = 4;
+}
+
+message UpdateMetadataResponse {
+  // Ids the patch now holds for, in request order; absent ids are omitted. A
+  // record already in the requested state is reported without a new write.
+  repeated string ids = 1;
+}
+
+// DeleteVectors removes a bounded set selected by ids or metadata. Exactly one
+// selector is required. Filter deletion is exact even for cold collections and
+// may scan their persisted segments, so it is a lifecycle operation rather
+// than a query hot path. A filter matching more than one batch deletes what it
+// found and sets truncated, so repeating the call makes progress.
+message DeleteVectorsRequest {
+  string collection = 1;
+  repeated string ids = 2;
+  FilterExpr filter_expr = 3;
+}
+
+message DeleteVectorsResponse {
+  // Ids whose delete was durably recorded: request order for an ids selector,
+  // sorted for a filter. Known-missing ids are omitted. On a cold-only
+  // collection explicit ids can be recorded and reported optimistically when
+  // persisted existence is not point-checkable.
+  repeated string ids = 1;
+  // Set when a filter matched more records than one request may delete. The
+  // ids above were deleted; repeat the identical request to continue, and
+  // stop when truncated comes back false. Which subset is deleted first is
+  // unspecified, so callers must not assume the sorted prefix.
+  bool truncated = 2;
+}
+
+message DescribeCollectionRequest {
+  string collection = 1;
+}
+
+message DescribeCollectionResponse {
+  string name = 1;
+  int32 dimension = 2;
+  // "l2" | "cosine" | "dot".
+  string metric = 3;
+  string index_type = 4;
+  bool segment_backed = 5;
+  // Empty when lexical search is not configured.
+  string text_field = 6;
+}
+
+message SearchVectorsRequest {
+  string collection = 1;
+  repeated float values = 2;
+  int32 k = 3;
+  // Optional override of the index search beam width. 0 means "use default".
+  int32 ef = 4;
+  // Cold serves the query directly from object-storage segments instead of the
+  // in-memory index. Requires the server to be started with a segment store.
+  bool cold = 5;
+  // NProbe overrides the IVF probe count for cold queries. 0 means "use the
+  // searcher default"; ignored when cold is false.
+  int32 nprobe = 6;
+  // Filter restricts hits to records whose metadata matches every key/value
+  // pair (equality, AND across keys). Empty means no filtering. Applied on both
+  // the in-memory and the cold (segment) path.
+  map<string, string> filter = 7;
+  // Text, when set, runs a BM25 lexical search over the collection's segment
+  // index. With no values it is a pure text search; with values it is a hybrid
+  // search whose vector and text legs are fused server-side (see Fusion).
+  // Requires a segment store.
+  string text = 8;
+  // Fusion selects how a hybrid search combines its vector and text legs.
+  // Ignored unless both text and values are set. Absent means Reciprocal Rank
+  // Fusion with the default rank constant.
+  Fusion fusion = 9;
+  // FilterExpr is the typed filter language: a boolean expression tree over
+  // metadata conditions (eq, in, range, exists) composed with and/or/not.
+  // The legacy filter field is exactly an AND of eq conditions; setting both
+  // filter and filter_expr is an error.
+  FilterExpr filter_expr = 10;
+  // Rescore tunes the exact-rescore stage on a compressed (IVF-PQ)
+  // collection: 0 uses the server default (the recall-first tier), > 0 sets
+  // the per-query rescore pool size, and < 0 opts into ADC-only ranking,
+  // the approximate fast tier that skips exact rescoring entirely. Other
+  // collection types rank exactly and ignore it.
+  int32 rescore = 11;
+}
+
+// FilterExpr is one node of a metadata filter expression tree. Exactly one of
+// the branches is set.
+message FilterExpr {
+  oneof expr {
+    FilterJunction and = 1;  // matches when every child matches
+    FilterJunction or = 2;   // matches when at least one child matches
+    FilterExpr not = 3;      // matches when the child does not
+    FilterCond cond = 4;     // a single condition on one metadata key
+  }
+}
+
+// FilterJunction is the child list of an and/or node.
+message FilterJunction {
+  repeated FilterExpr exprs = 1;
+}
+
+// FilterCond is a single condition on one metadata key. A record missing the
+// key never matches eq/in/range; it matches exists with value false.
+message FilterCond {
+  string key = 1;
+  oneof op {
+    // Legacy string operands. Kept wire-compatible for older clients.
+    string eq = 2;
+    ValueList in = 3;
+    // Matches when the metadata value falls within the bounds.
+    FilterRange range = 4;
+    // Matches when the key's presence equals the flag.
+    bool exists = 5;
+    // Typed equality/membership operands. New clients use these for numbers
+    // and booleans so gRPC has the same semantics as the JSON filter API.
+    TypedValue typed_eq = 6;
+    TypedValueList typed_in = 7;
+  }
+}
+
+// ValueList carries the candidate values of an "in" condition.
+message ValueList {
+  repeated string values = 1;
+}
+
+message TypedValueList {
+  repeated TypedValue values = 1;
+}
+
+// FilterRange bounds a metadata value from below (gt or gte) and/or above (lt
+// or lte); unset bounds are unbounded sides. With numeric false, bounds match
+// string metadata and compare lexicographically, so store sortable encodings such
+// as RFC3339 timestamps or zero-padded integers. With numeric true, the bound
+// fields are parsed as doubles and match number metadata only; numeric-looking
+// string metadata does not participate.
+message FilterRange {
+  optional string gt = 1;
+  optional string gte = 2;
+  optional string lt = 3;
+  optional string lte = 4;
+  bool numeric = 5;
+}
+
+// Fusion configures how a hybrid search fuses its vector and text legs.
+message Fusion {
+  // "rrf" (Reciprocal Rank Fusion, default) or "linear".
+  string method = 1;
+  // Weight of the vector leg for linear fusion, in [0,1] (default 0.5). The text
+  // leg gets 1-alpha. Ignored by rrf.
+  double alpha = 2;
+  // Rank constant for rrf (default 60). Ignored by linear.
+  int32 rrf_k = 3;
+}
+
+message SearchHit {
+  string id = 1;
+  float distance = 2;
+  map<string, string> metadata = 3;
+  // Relevance score, larger is better: the BM25 score on a text search or the
+  // fused score on a hybrid search. 0 on a pure vector search.
+  float score = 4;
+  // Typed metadata, filled when the record holds at least one non-string
+  // value; `metadata` always carries the canonical string forms. See Vector.
+  map<string, TypedValue> typed_metadata = 5;
+}
+
+message SearchVectorsResponse {
+  repeated SearchHit hits = 1;
+}

@@ -1,0 +1,65 @@
+name: python-publish
+
+# Publishes the `polign` package to PyPI on tags shaped `python/vX.Y.Z`.
+# Server releases use bare `vX.Y.Z` tags created by the release pipeline in
+# the private source repository; the prefix keeps the two tag lines apart.
+#
+# Authentication is PyPI trusted publishing: the PyPI project trusts this
+# repository, this workflow file, and the `pypi` GitHub environment, so no
+# long-lived token is stored anywhere.
+
+on:
+  push:
+    tags: ["python/v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  pypi:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write # OIDC token for PyPI trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The package version is bumped by hand in two places; make a mismatch
+      # with the tag fail here instead of publishing a stray version.
+      - name: Check the package version matches the tag
+        working-directory: python
+        run: |
+          tag="${GITHUB_REF_NAME#python/v}"
+          pkg="$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} implies version ${tag}, but python/pyproject.toml says ${pkg}"
+            exit 1
+          fi
+          fallback="$(grep -m1 '^    __version__ = "' polign/__init__.py | cut -d'"' -f2)"
+          if [ "$tag" != "$fallback" ]; then
+            echo "::error::polign/__init__.py fallback __version__ is ${fallback}, expected ${tag}"
+            exit 1
+          fi
+
+      - name: Build sdist and wheel
+        working-directory: python
+        run: |
+          python -m pip install build
+          python -m build
+
+      - name: Check the wheel is not empty
+        working-directory: python
+        run: python -m zipfile -l dist/*.whl | grep -q 'polign/client.py'
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist
+          # PyPI uploads are immutable; a re-run of an already published
+          # version is left alone instead of failing the job.
+          skip-existing: true

@@ -1,8 +1,8 @@
 # Polign
 
 Object-store-native vector database: one static binary, durability from your
-own bucket. This repository is the home for **official binary releases** —
-Polign's source is not public.
+own bucket. This repository is the home for the **official binary releases**
+and the **open source client libraries**. The server's source is not public.
 
 Docs, architecture, and guides: **[polign.com](https://polign.com)**
 
@@ -64,6 +64,36 @@ polign-server -store fs:/var/lib/polign
 
 `sha256` checksums for every archive are attached to each release as
 `checksums.txt`.
+
+## Python client
+
+The `polign` package is a thin client with two interchangeable transports:
+HTTP with no dependencies, and gRPC through the `[grpc]` extra.
+
+```sh
+pip install polign
+pip install "polign[grpc]"
+```
+
+```python
+from polign import Client
+
+client = Client("http://localhost:23000")
+client.put("docs", "doc-1", embedding, metadata={"title": "Cats"})
+for hit in client.search("docs", values=query_embedding, k=10):
+    print(hit.id, hit.distance, hit.metadata)
+```
+
+Source, tests, and the full operations reference live in [python/](python/).
+The gRPC wire contract is [proto/vectordb.proto](proto/vectordb.proto).
+Framework integrations (LangChain, LlamaIndex) will be built in this
+repository on top of the client.
+
+## License
+
+The client libraries, the proto file, and everything else in this repository
+are licensed under the [Apache License 2.0](LICENSE). The server binaries
+attached to releases ship with their own license inside each archive.
 
 ## Issues
 
