@@ -1,8 +1,9 @@
 name: python-publish
 
 # Publishes the Python packages to PyPI:
-#   python/vX.Y.Z     -> the `polign` client   (python/)
-#   langchain/vX.Y.Z  -> `langchain-polign`     (python/langchain-polign/)
+#   python/vX.Y.Z     -> the `polign` client               (python/)
+#   langchain/vX.Y.Z  -> `langchain-polign`                 (python/langchain-polign/)
+#   llamaindex/vX.Y.Z -> `llama-index-vector-stores-polign` (python/llama-index-vector-stores-polign/)
 # Server releases use bare `vX.Y.Z` tags created by the release pipeline in
 # the private source repository; the prefixes keep the tag lines apart.
 #
@@ -12,7 +13,7 @@ name: python-publish
 
 on:
   push:
-    tags: ["python/v*", "langchain/v*"]
+    tags: ["python/v*", "langchain/v*", "llamaindex/v*"]
 
 permissions:
   contents: read
@@ -42,6 +43,10 @@ jobs:
                           echo "PKG_VERSION=${GITHUB_REF_NAME#langchain/v}" >> "$GITHUB_ENV"
                           echo "PKG_INIT=langchain_polign/__init__.py" >> "$GITHUB_ENV"
                           echo "PKG_MARKER=langchain_polign/vectorstores.py" >> "$GITHUB_ENV" ;;
+            llamaindex/v*) echo "PKG_DIR=python/llama-index-vector-stores-polign" >> "$GITHUB_ENV"
+                          echo "PKG_VERSION=${GITHUB_REF_NAME#llamaindex/v}" >> "$GITHUB_ENV"
+                          echo "PKG_INIT=" >> "$GITHUB_ENV"
+                          echo "PKG_MARKER=llama_index/vector_stores/polign/base.py" >> "$GITHUB_ENV" ;;
             *)            echo "::error::unexpected tag ${GITHUB_REF_NAME}"; exit 1 ;;
           esac
 
@@ -55,10 +60,12 @@ jobs:
             echo "::error::tag ${GITHUB_REF_NAME} implies version ${PKG_VERSION}, but ${PKG_DIR}/pyproject.toml says ${pkg}"
             exit 1
           fi
-          fallback="$(grep -m1 '^    __version__ = "' "$PKG_INIT" | cut -d'"' -f2)"
-          if [ "$PKG_VERSION" != "$fallback" ]; then
-            echo "::error::${PKG_INIT} fallback __version__ is ${fallback}, expected ${PKG_VERSION}"
-            exit 1
+          if [ -n "$PKG_INIT" ]; then
+            fallback="$(grep -m1 '^    __version__ = "' "$PKG_INIT" | cut -d'"' -f2)"
+            if [ "$PKG_VERSION" != "$fallback" ]; then
+              echo "::error::${PKG_INIT} fallback __version__ is ${fallback}, expected ${PKG_VERSION}"
+              exit 1
+            fi
           fi
 
       - name: Build sdist and wheel

@@ -118,3 +118,7 @@ def test_from_texts(polign_url: str) -> None:
         url=polign_url,
     )
     assert s.similarity_search("two", k=1)[0].metadata == {"n": 2}
+
+
+def test_delete_by_filter_on_unwritten_collection(store: PolignVectorStore) -> None:
+    assert store.delete(filter={"doc": "1"}) is True

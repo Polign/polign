@@ -86,3 +86,32 @@ jobs:
       - name: Integration tests
         working-directory: python/langchain-polign
         run: pytest tests/integration_tests -v
+
+  llamaindex:
+    # The LlamaIndex vector store, tested against the latest server release.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        working-directory: python/llama-index-vector-stores-polign
+        run: |
+          python -m pip install -e ../  # the client from this checkout, not PyPI
+          python -m pip install -e ".[grpc]" pytest pytest-asyncio
+      - name: Download the latest polign-server release
+        run: |
+          set -euo pipefail
+          tag="$(curl -fsSL https://api.github.com/repos/Polign/polign/releases/latest | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"])')"
+          echo "resolved ${tag}"
+          mkdir -p "$RUNNER_TEMP/polign"
+          curl -fsSL "https://github.com/Polign/polign/releases/download/${tag}/polign_db_linux_amd64.tar.gz" | tar -xz -C "$RUNNER_TEMP/polign"
+          echo "POLIGN_SERVER=$RUNNER_TEMP/polign/polign-server" >> "$GITHUB_ENV"
+      - name: Tests
+        working-directory: python/llama-index-vector-stores-polign
+        run: pytest -v

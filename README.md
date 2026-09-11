@@ -108,6 +108,29 @@ store.similarity_search("purring", k=1, filter={"lang": "en"})
 See [python/langchain-polign/](python/langchain-polign/) for how documents
 are stored and the full API.
 
+### LlamaIndex
+
+`llama-index-vector-stores-polign` provides `PolignVectorStore` for
+LlamaIndex, with metadata filters, `delete_ref_doc`, MMR, and text or hybrid
+query modes on servers with a segment store.
+
+```sh
+pip install llama-index-vector-stores-polign
+```
+
+```python
+from llama_index.core import StorageContext, VectorStoreIndex
+from llama_index.vector_stores.polign import PolignVectorStore
+
+store = PolignVectorStore(collection_name="docs", url="http://localhost:23000")
+index = VectorStoreIndex.from_documents(
+    documents, storage_context=StorageContext.from_defaults(vector_store=store)
+)
+index.as_retriever(similarity_top_k=5).retrieve("what purrs?")
+```
+
+See [python/llama-index-vector-stores-polign/](python/llama-index-vector-stores-polign/).
+
 ## License
 
 The client libraries, the proto file, and everything else in this repository

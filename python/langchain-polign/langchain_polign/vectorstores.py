@@ -236,6 +236,9 @@ class PolignVectorStore(VectorStore):
                 for chunk in _chunks(list(ids), _BATCH):
                     self._client.delete_many(self._collection, ids=chunk)
             if filter:
+                # A filter delete on a collection that was never written is
+                # an invalid-argument error server-side, not a not-found.
+                self._client.describe_collection(self._collection)
                 while True:
                     result = self._client.delete_many(self._collection, filter=filter)
                     if not getattr(result, "truncated", False):
