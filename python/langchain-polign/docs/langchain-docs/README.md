@@ -1,31 +1,51 @@
 # Listing langchain-polign on docs.langchain.com
 
-LangChain's integration docs live in the
-[langchain-ai/docs](https://github.com/langchain-ai/docs) repository. The
-vector store table on the integrations page is generated from each page's
-frontmatter, so listing the package means adding one page (plus an optional
-provider page). Nothing in `docs.json` needs to change: the navigation lists
-only the vector store index, and the table links to each page.
+LangChain no longer accepts manual docs PRs for new listings. The process
+(see docs.langchain.com, "Publish an integration") is:
 
-## Files
+1. File an **Integration listing** issue in `langchain-ai/docs` using the
+   form at
+   https://github.com/langchain-ai/docs/issues/new?template=06-integration-submission.yml
+2. A maintainer applies the `integration-run` label. Automation then opens
+   a PR that adds a row to `scripts/data/integration_external_docs.yaml`
+   and regenerates the vector store table and provider card. The name
+   column links to the `docs_url` from the form.
+3. Packages under 50,000 monthly downloads get that external row only.
+   A hosted guide page (`polign.mdx` here) is added only once the package
+   passes 50,000 monthly downloads or a maintainer marks it featured.
 
-| File here | Destination in langchain-ai/docs |
+## Form values
+
+| Field | Value |
 |---|---|
-| `polign.mdx` | `src/oss/python/integrations/vectorstores/polign.mdx` |
-| `providers-polign.mdx` | `src/oss/python/integrations/providers/polign.mdx` |
+| Display or class name | `PolignVectorStore` |
+| Language | Python |
+| Component type | vectorstores |
+| PyPI package name | `langchain-polign` |
+| Docs URL | `https://github.com/Polign/polign/tree/main/python/langchain-polign` (switch to the polign.com guide once it exists) |
+| Source repository | `Polign/polign` |
+| Short provider description | Vector store for Polign, an object-store-native vector database, with metadata filtering, MMR, and BM25 hybrid search. |
+| Capability flags | see below |
 
-## Steps
+```
+delete_by_id: true
+filtering: true
+search_by_vector: true
+search_with_score: true
+async_api: true
+passes_standard_tests: true
+multi_tenancy: false
+ids_in_add_documents: true
+```
 
-1. Fork `langchain-ai/docs` and clone the fork.
-2. Copy the two files to the destinations above.
-3. Optional: `make lint` in the docs checkout runs their markdown checks.
-4. Open a PR with the title `docs: add Polign vector store integration` and
-   the body from `PR.md`.
+## Files kept here
 
-The download and featured tables under `src/snippets/oss/` are regenerated
-by the maintainers with `scripts/refresh_integration_downloads.py`; do not
-edit them in the PR.
+| File | Purpose |
+|---|---|
+| `polign.mdx` | Hosted guide page, ready for `src/oss/python/integrations/vectorstores/polign.mdx` when eligible. Every snippet was run against a live server. |
+| `providers-polign.mdx` | Provider page to go with it, `src/oss/python/integrations/providers/polign.mdx`. |
+| `PR.md` | PR title and body for the hosted-guide submission. |
 
-Keep the frontmatter `integration:` block accurate when the package changes.
-`passes_standard_tests: true` is backed by `tests/integration_tests`, which
-runs `langchain_tests.integration_tests.VectorStoreIntegrationTests`.
+Keep the capability flags in sync with `polign.mdx` frontmatter and the
+package. `passes_standard_tests: true` is backed by `tests/integration_tests`,
+which runs `langchain_tests.integration_tests.VectorStoreIntegrationTests`.
