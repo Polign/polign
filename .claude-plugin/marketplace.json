@@ -1,0 +1,18 @@
+{
+  "name": "polign",
+  "owner": {
+    "name": "Polign",
+    "url": "https://polign.com"
+  },
+  "metadata": {
+    "description": "Official Polign plugin for Claude Code: search your own polign_db collections, and get correct answers about running the server and writing code against it."
+  },
+  "plugins": [
+    {
+      "name": "polign",
+      "source": "./plugins/polign",
+      "description": "Search your own vector database from Claude Code, and get correct answers about running polign_db and writing code against it.",
+      "version": "0.1.0"
+    }
+  ]
+}

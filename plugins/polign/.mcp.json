@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "polign": {
+      "command": "polign",
+      "args": ["mcp", "-write=${user_config.write}"],
+      "env": {
+        "POLIGN_URL": "${user_config.url}",
+        "POLIGN_COLLECTION": "${user_config.collection}",
+        "POLIGN_API_KEY": "${user_config.api_key}"
+      }
+    }
+  }
+}

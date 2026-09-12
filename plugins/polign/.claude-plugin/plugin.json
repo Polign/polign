@@ -1,0 +1,40 @@
+{
+  "name": "polign",
+  "displayName": "Polign",
+  "version": "0.1.0",
+  "description": "Search your own vector database from Claude Code, and get correct answers about running polign_db and writing code against it.",
+  "author": {
+    "name": "Polign",
+    "url": "https://polign.com"
+  },
+  "homepage": "https://polign.com",
+  "repository": "https://github.com/Polign/polign",
+  "license": "Apache-2.0",
+  "keywords": ["vector-database", "search", "memory", "rag", "embeddings"],
+  "userConfig": {
+    "url": {
+      "type": "string",
+      "title": "Server URL",
+      "description": "Base URL of your polign_db server, e.g. http://localhost:23000",
+      "default": "http://localhost:23000",
+      "required": true
+    },
+    "collection": {
+      "type": "string",
+      "title": "Default collection",
+      "description": "Collection to use when a tool call does not name one. Set this: a server started with -store does not mount the collection API, so Claude cannot discover collection names on its own."
+    },
+    "api_key": {
+      "type": "string",
+      "title": "API key",
+      "description": "Sent as a bearer token. Leave empty unless the server runs with -require-data-key.",
+      "sensitive": true
+    },
+    "write": {
+      "type": "boolean",
+      "title": "Allow writes",
+      "description": "Expose the tool that stores records. Off by default, because a model that can write can also replace existing records by reusing their ids.",
+      "default": false
+    }
+  }
+}
