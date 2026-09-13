@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "recall": {
+      "command": "polign",
+      "args": ["mcp", "-memory-only", "-write"]
+    }
+  }
+}

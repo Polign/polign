@@ -5,13 +5,19 @@
     "url": "https://polign.com"
   },
   "metadata": {
-    "description": "Official Polign plugin for Claude Code: search your own polign_db collections, and get correct answers about running the server and writing code against it."
+    "description": "Official Polign plugins: Recall agent memory and Polign database tools."
   },
   "plugins": [
     {
       "name": "polign",
       "source": "./plugins/polign",
       "description": "Search your own vector database from Claude Code, and get correct answers about running polign_db and writing code against it.",
+      "version": "0.1.0"
+    },
+    {
+      "name": "recall",
+      "source": "./plugins/recall",
+      "description": "Typed agent memory with corrections and history, powered by Recall.",
       "version": "0.1.0"
     }
   ]
