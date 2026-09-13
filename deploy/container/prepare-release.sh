@@ -17,7 +17,8 @@ work, destination=map(pathlib.Path, sys.argv[1:])
 checksums={parts[1].lstrip('*'):parts[0] for line in (work/'checksums.txt').read_text().splitlines() if (parts:=line.split())}
 for arch in ('amd64', 'arm64'):
     archive=work/f'polign_db_linux_{arch}.tar.gz'
-    assert hashlib.sha256(archive.read_bytes()).hexdigest()==checksums[archive.name]
+    if hashlib.sha256(archive.read_bytes()).hexdigest()!=checksums[archive.name]:
+        raise SystemExit(archive.name+' checksum mismatch')
     target=destination/'bin/linux'/arch
     target.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive) as tar:

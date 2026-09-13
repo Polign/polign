@@ -23,7 +23,8 @@ jobs:
           python - <<'PY'
           import os, subprocess, yaml
           chart=yaml.safe_load(open('charts/polign/Chart.yaml'))
-          assert os.environ['GITHUB_REF_NAME']=='polign-chart-v'+chart['version']
+          if os.environ['GITHUB_REF_NAME']!='polign-chart-v'+chart['version']:
+              raise SystemExit('chart version does not match the release tag')
           subprocess.run(['docker','manifest','inspect','ghcr.io/polign/polign-server:'+chart['appVersion']],check=True,stdout=subprocess.DEVNULL)
           PY
           helm lint charts/polign --set store.uri=s3://test-bucket/polign
