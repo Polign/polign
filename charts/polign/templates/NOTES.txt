@@ -1,0 +1,14 @@
+Polign is available inside the cluster at {{ .Release.Name }}.{{ .Release.Namespace }}.svc:23000 (HTTP) and :23001 (gRPC).
+API-key authentication is required. Create a key using the pod's bucket identity:
+
+  kubectl -n {{ .Release.Namespace }} exec deployment/{{ .Release.Name }} -- polign-apikey -store {{ .Values.store.uri | quote }} create -namespace recall-demo
+
+Save the key securely; only its hash is retained. For local access:
+
+  kubectl -n {{ .Release.Namespace }} port-forward service/{{ .Release.Name }} 23100:23000
+
+Set POLIGN_URL={{ ternary "https" "http" (not (empty .Values.tls.existingSecret)) }}://127.0.0.1:23100 and POLIGN_API_KEY in the environment of your Recall client.
+For TLS, the certificate must cover the hostname you use and be trusted by your client.
+
+This chart supports one server. Upgrades use Recreate and briefly interrupt service.
+Uninstalling the chart does not delete bucket data or an existing PVC.

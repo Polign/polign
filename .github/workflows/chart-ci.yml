@@ -1,0 +1,23 @@
+name: chart-ci
+on:
+  pull_request:
+    paths: ['charts/**', 'deploy/container/**', 'tests/kubernetes/**', 'scripts/kubernetes-tools.sh', '.github/workflows/*kubernetes*', '.github/workflows/chart*', '.github/workflows/container*']
+  push:
+    branches: [main]
+    paths: ['charts/**', 'deploy/container/**', 'tests/kubernetes/**', 'scripts/kubernetes-tools.sh', '.github/workflows/*kubernetes*', '.github/workflows/chart*', '.github/workflows/container*']
+permissions:
+  contents: read
+jobs:
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: bash scripts/kubernetes-tools.sh "$RUNNER_TEMP/tools"
+      - run: echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+      - run: python -m pip install PyYAML
+      - run: helm lint charts/polign --set store.uri=s3://test-bucket/polign
+      - run: python tests/kubernetes/chart.py
+      - run: helm package charts/polign --destination "$RUNNER_TEMP"

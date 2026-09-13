@@ -1,0 +1,13 @@
+apiVersion: v2
+name: polign
+description: Polign vector database backed by your object-store bucket
+type: application
+version: 0.1.0
+appVersion: "0.6.5"
+kubeVersion: ">=1.30.0-0"
+home: https://polign.com
+sources:
+  - https://github.com/Polign/polign
+keywords: [polign, vector-database, agent-memory]
+annotations:
+  org.opencontainers.image.source: https://github.com/Polign/polign
