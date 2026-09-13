@@ -1,0 +1,84 @@
+name: container-release
+run-name: Polign container ${{ inputs.version }}
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published server release (vX.Y.Z)
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: container-${{ inputs.version }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    env:
+      POLIGN_RELEASE_VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "KUBECONFIG=$RUNNER_TEMP/polign-kubeconfig" >> "$GITHUB_ENV"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - name: Verify the private build's published binaries
+        run: bash deploy/container/prepare-release.sh "$POLIGN_RELEASE_VERSION" "$RUNNER_TEMP/image"
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Build the image for the cluster test
+        run: |
+          docker buildx build --load --platform linux/amd64 \
+            --build-arg VERSION="${POLIGN_RELEASE_VERSION#v}" \
+            -f deploy/container/Dockerfile -t polign-server:release-check "$RUNNER_TEMP/image"
+      - run: bash scripts/kubernetes-tools.sh "$RUNNER_TEMP/tools"
+      - run: echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+      - run: python -m pip install boto3 PyYAML
+      - name: Check the chart and recovery in Kubernetes
+        run: |
+          python tests/kubernetes/chart.py
+          kind create cluster --name polign-release-test --kubeconfig "$KUBECONFIG" \
+            --image kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0 --wait 120s
+          kind load docker-image polign-server:release-check --name polign-release-test
+          python tests/kubernetes/smoke.py --context kind-polign-release-test --image polign-server:release-check
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Set image version
+        run: echo "IMAGE_VERSION=${POLIGN_RELEASE_VERSION#v}" >> "$GITHUB_ENV"
+      - name: Publish both architectures
+        id: image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ${{ runner.temp }}/image
+          file: deploy/container/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/polign/polign-server:${{ env.IMAGE_VERSION }}
+          build-args: VERSION=${{ env.IMAGE_VERSION }}
+          provenance: true
+          sbom: true
+      - name: Sign the published image
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: cosign sign --yes "ghcr.io/polign/polign-server@$IMAGE_DIGEST"
+      - name: Verify anonymous access
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/anonymous"
+          DOCKER_CONFIG="$RUNNER_TEMP/anonymous" docker manifest inspect "ghcr.io/polign/polign-server@$IMAGE_DIGEST" >/dev/null
+          echo "Published ghcr.io/polign/polign-server:$IMAGE_VERSION ($IMAGE_DIGEST)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove test cluster
+        if: always()
+        run: if command -v kind >/dev/null; then kind delete cluster --name polign-release-test; fi

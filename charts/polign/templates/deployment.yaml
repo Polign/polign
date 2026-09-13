@@ -1,0 +1,145 @@
+{{- $store := required "Set store.uri to your bucket URI" .Values.store.uri -}}
+{{- if and (hasPrefix "fs:" $store) (not .Values.store.existingClaim) -}}
+{{- fail "A filesystem store requires store.existingClaim; durable data cannot use emptyDir" -}}
+{{- end -}}
+{{- if and (not (hasPrefix "fs:" $store)) .Values.store.existingClaim -}}
+{{- fail "store.existingClaim is only used with fs:/var/lib/polign" -}}
+{{- end -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "polign.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "polign.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- include "polign.selector" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "polign.serviceAccount" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountToken }}
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: polign
+          image: {{ include "polign.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - -store={{ $store }}
+            - -http=:23000
+            - -grpc=:23001
+            - -require-data-key
+            - -shutdown-delay=5s
+            - -telemetry=false
+            {{- if not (hasPrefix "fs:" $store) }}
+            - -disk-cache-dir=/cache
+            - -disk-cache-bytes={{ .Values.cache.bytes | int64 }}
+            {{- end }}
+            {{- if .Values.tls.existingSecret }}
+            - -tls-cert=/tls/tls.crt
+            - -tls-key=/tls/tls.key
+            {{- end }}
+          ports:
+            - {name: http, containerPort: 23000}
+            - {name: grpc, containerPort: 23001}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          {{- with .Values.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: http
+              scheme: {{ ternary "HTTPS" "HTTP" (not (empty .Values.tls.existingSecret)) }}
+            periodSeconds: 5
+            failureThreshold: 120
+            timeoutSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+              scheme: {{ ternary "HTTPS" "HTTP" (not (empty .Values.tls.existingSecret)) }}
+            periodSeconds: 2
+            failureThreshold: 1
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+              scheme: {{ ternary "HTTPS" "HTTP" (not (empty .Values.tls.existingSecret)) }}
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 2
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - {name: cache, mountPath: /cache}
+            - {name: tmp, mountPath: /tmp}
+            {{- if .Values.store.existingClaim }}
+            - {name: data, mountPath: /var/lib/polign}
+            {{- end }}
+            {{- if .Values.tls.existingSecret }}
+            - {name: tls, mountPath: /tls, readOnly: true}
+            {{- end }}
+      volumes:
+        - name: cache
+          emptyDir:
+            sizeLimit: {{ .Values.cache.sizeLimit }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        {{- if .Values.store.existingClaim }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.store.existingClaim }}
+        {{- end }}
+        {{- if .Values.tls.existingSecret }}
+        - name: tls
+          secret:
+            secretName: {{ .Values.tls.existingSecret }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

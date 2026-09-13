@@ -65,6 +65,20 @@ polign-server -store fs:/var/lib/polign
 `sha256` checksums for every archive are attached to each release as
 `checksums.txt`.
 
+## Kubernetes
+
+Deploy Polign with the [Helm chart](charts/polign). The chart runs one server
+against your bucket, with API-key authentication and recovery across pod
+replacement. Set up the bucket identity as described in the chart README, then:
+
+```sh
+helm install polign oci://ghcr.io/polign/charts/polign \
+  --version 0.1.0 --set store.uri=s3://your-bucket/polign
+```
+
+The [server container](deploy/container) supports Linux AMD64 and ARM64.
+Chart 0.1.0 uses Polign 0.6.5. Upgrades briefly interrupt service.
+
 ## Recall agent memory
 
 The [Recall plugin](plugins/recall) gives Claude Code memory across sessions:

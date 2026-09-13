@@ -1,0 +1,38 @@
+# This release supports one writer. Upgrades briefly interrupt service.
+replicaCount: 1
+image:
+  repository: ghcr.io/polign/polign-server
+  tag: "" # Defaults to Chart.appVersion; never uses latest.
+  digest: "" # Optional sha256 digest takes precedence over tag.
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+store:
+  uri: "" # Required: s3://bucket/prefix, gcs://bucket/prefix, or az://account/container/prefix.
+  # For a local demo only: uri=fs:/var/lib/polign and a pre-created PVC.
+  existingClaim: ""
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {} # e.g. eks.amazonaws.com/role-arn for AWS workload identity.
+  automountToken: false
+podLabels: {}
+podAnnotations: {}
+env: [] # Kubernetes EnvVar entries; use valueFrom.secretKeyRef for credentials.
+envFrom: [] # Existing Secret / ConfigMap references.
+tls:
+  existingSecret: "" # kubernetes.io/tls Secret; enables TLS on both listeners.
+cache:
+  bytes: 1073741824
+  sizeLimit: 2Gi
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+    ephemeral-storage: 2Gi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+    ephemeral-storage: 3Gi
+nodeSelector: {}
+tolerations: []
+affinity: {}
