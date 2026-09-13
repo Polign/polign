@@ -79,20 +79,33 @@ helm install polign oci://ghcr.io/polign/charts/polign \
 The [server container](deploy/container) supports Linux AMD64 and ARM64.
 Chart 0.1.0 uses Polign 0.6.5. Upgrades briefly interrupt service.
 
-## Recall agent memory
+## Shared agent memory with Recall
 
-The [Recall plugin](plugins/recall) gives Claude Code memory across sessions:
-remember preferences and project facts, correct them, and inspect their history.
-With Polign v0.6.4+, `polign mcp -memory-only -write` needs no embedding service
-or custom schema. The host agent extracts facts; Recall validates and resolves them.
+Use [Recall](https://github.com/Polign/recall) to share typed memory across
+agents, services, and sessions. One agent can save a project fact; another can
+read it, update it, or inspect its history. Recall defines the memory types and
+correction rules. Polign stores the records and makes them available to agents
+with access to the same collection and namespace.
 
-```text
-/plugin marketplace add Polign/polign
-/plugin install recall@polign
+Choose the integration that fits your application:
+
+| Integration | Use it to |
+| --- | --- |
+| [Go library](https://github.com/Polign/recall) | Embed Recall in an agent or service. |
+| [Python client](https://github.com/Polign/recall/tree/main/python) | Read and write memories from Python through Recall's MCP server. |
+| MCP server | Give an MCP-compatible agent access to the memory tools. |
+
+With Polign v0.6.4+, an MCP host can launch:
+
+```sh
+polign mcp -memory-only -write -collection agent_memory
 ```
 
-The [Recall Python client](https://github.com/Polign/recall/tree/main/python)
-uses the same memory service. [Recall library and documentation](https://github.com/Polign/recall).
+This connects to the local Polign server by default. Set `POLIGN_URL` and, when
+required, `POLIGN_API_KEY` to connect to a shared server. Default memory types
+and built-in word-overlap search let you start without an embedding service.
+
+The [Claude Code plugin](plugins/recall) is one example of an MCP integration.
 
 ## Python client
 
