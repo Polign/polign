@@ -1,0 +1,10 @@
+{
+  "name": "recall",
+  "version": "0.1.0",
+  "description": "Remember preferences and project facts across sessions, correct them, and inspect their history.",
+  "author": {"name": "Polign", "url": "https://polign.com"},
+  "homepage": "https://github.com/Polign/recall",
+  "repository": "https://github.com/Polign/polign",
+  "license": "Apache-2.0",
+  "keywords": ["agent-memory", "mcp", "recall", "preferences"]
+}

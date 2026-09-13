@@ -65,6 +65,21 @@ polign-server -store fs:/var/lib/polign
 `sha256` checksums for every archive are attached to each release as
 `checksums.txt`.
 
+## Recall agent memory
+
+The [Recall plugin](plugins/recall) gives Claude Code memory across sessions:
+remember preferences and project facts, correct them, and inspect their history.
+With Polign v0.6.4+, `polign mcp -memory-only -write` needs no embedding service
+or custom schema. The host agent extracts facts; Recall validates and resolves them.
+
+```text
+/plugin marketplace add Polign/polign
+/plugin install recall@polign
+```
+
+The [Recall Python client](https://github.com/Polign/recall/tree/main/python)
+uses the same memory service. [Recall library and documentation](https://github.com/Polign/recall).
+
 ## Python client
 
 The `polign` package is a thin client with two interchangeable transports:
