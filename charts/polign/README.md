@@ -7,9 +7,9 @@ The recovery suite runs on Kubernetes 1.35.8.
 
 ## Try it
 
-Nothing outside the cluster is needed: no bucket, no cloud identity, no Polign
-tooling installed locally. A key is a prefix and two random values, so any
-source of randomness makes one.
+You need `kubectl` pointed at a cluster and Helm 3.22+, and nothing else: no
+bucket, no cloud identity, and no Polign tooling installed. A key is a prefix
+and two random values, so any source of randomness makes one.
 
 ```sh
 kubectl create namespace polign
