@@ -34,15 +34,59 @@ use the same `serviceAccount.annotations`, `podLabels`, and `env` values with
 remains the cluster administrator's responsibility; the chart creates no cloud
 resources or Kubernetes RoleBindings.
 
+Create the API key before installing. `generate` needs no cluster and no
+bucket, so the key can come from whatever already manages your secrets:
+
+```sh
+kubectl create namespace polign
+kubectl -n polign create secret generic polign-key \
+  --from-literal=api-key="$(polign-apikey generate)"
+```
+
+Name that Secret in your values and the server registers the key when it starts:
+
+```yaml
+auth:
+  existingSecret: polign-key
+  namespace: recall   # optional: bind the key to one namespace
+```
+
 ```sh
 helm install polign oci://ghcr.io/polign/charts/polign \
-  --version 0.1.0 --namespace polign --create-namespace \
+  --version 0.2.0 --namespace polign \
   -f polign-values.yaml --wait --timeout 10m
 ```
 
+That is the whole install. Adoption is idempotent, so restarts and upgrades
+re-check the same key rather than minting another, and a restart can never
+rebind an existing key to a different secret or namespace. The chart never
+creates the Secret, so the key stays in your secret manager and out of Helm
+values and source control.
+
+Leaving `auth.existingSecret` empty keeps the older behaviour, where no key
+exists until you create one against the running pod.
+
 The same chart is attached to the
-[chart release](https://github.com/Polign/polign/releases/tag/polign-chart-v0.1.0)
-as `polign-0.1.0.tgz`, and can be installed from that downloaded file.
+[chart release](https://github.com/Polign/polign/releases/tag/polign-chart-v0.2.0)
+as `polign-0.2.0.tgz`, and can be installed from that downloaded file.
+
+The chart and its image are held in a public registry rather than a single
+cloud's catalog, so the same command installs on EKS, GKE, AKS, on-premises,
+and any other conformant cluster. Nothing in the chart depends on a particular
+cloud; the store URI and the service account annotations are what change.
+
+Every published chart is signed with Sigstore, with no key for anyone to hold
+or leak. Verify it before installing, and prefer the digest over the tag, since
+a tag can be moved later:
+
+```sh
+cosign verify ghcr.io/polign/charts/polign:0.2.0 \
+  --certificate-identity-regexp '^https://github\.com/Polign/polign/\.github/workflows/chart-release\.yml@' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+A signature proves this repository's release workflow published the chart. It
+is not a statement that the configuration you supply is safe.
 
 For S3-compatible stores, provide `AWS_ENDPOINT_URL_S3` and
 `AWS_S3_FORCE_PATH_STYLE=true`. Static credentials, when needed, belong in an
@@ -52,16 +96,19 @@ Do not put credentials directly in Helm values or source control.
 ## Connect Recall
 
 The Service is cluster-internal. API-key authentication is always enabled.
-Create a namespaced key using the pod's existing bucket identity:
+An application running in the cluster connects to `http://polign.polign.svc:23000`
+and reads the key from the same Secret the server adopted.
+
+For a second key, scoped differently from the one the deployment supplied, mint
+it against the pod's existing bucket identity:
 
 ```sh
 kubectl -n polign exec deployment/polign -- \
   polign-apikey -store s3://your-bucket/polign create -namespace recall-demo
 ```
 
-Save the displayed key securely; only its hash is stored. An application running
-in the cluster connects to `http://polign.polign.svc:23000` and reads its key
-from a Secret. For a local Claude Code or Python session:
+Only its hash is stored, so save what that prints. For a local Claude Code or
+Python session:
 
 ```sh
 kubectl -n polign port-forward service/polign 23100:23000
@@ -95,16 +142,23 @@ chart-level restriction and is outside this deployment's supported topology.
 
 `/healthz` checks the HTTP process. `/readyz` becomes available after startup
 restore and retained-log catch-up; it returns 503 during the five-second shutdown
-delay while health remains 200. Startup has a ten-minute probe budget. Request
+delay while health remains 200. The startup probe budget is configurable and
+defaults to 30 minutes, as described below. Request
 draining shares a ten-second deadline across HTTP and gRPC, followed by up to
 fifteen seconds for embedded persistence. The pod gets 45 seconds to terminate.
 Readiness does not actively probe cloud storage on every request.
+
+Startup restore and write-log catch-up must finish inside
+`startupProbe.periodSeconds * startupProbe.failureThreshold`, 30 minutes by
+default. A store that takes longer never becomes ready: the pod is killed and
+restarts into the same replay indefinitely. Measure your restore time and set
+the threshold above it before a large store is deployed.
 
 Pin an image version or `image.digest`. To upgrade:
 
 ```sh
 helm upgrade polign oci://ghcr.io/polign/charts/polign \
-  --version 0.1.0 --namespace polign -f polign-values.yaml --wait --timeout 10m
+  --version 0.2.0 --namespace polign -f polign-values.yaml --wait --timeout 10m
 ```
 
 Uninstalling the chart deletes its Deployment, Service, and ServiceAccount. It

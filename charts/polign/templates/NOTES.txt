@@ -1,9 +1,19 @@
 Polign is available inside the cluster at {{ .Release.Name }}.{{ .Release.Namespace }}.svc:23000 (HTTP) and :23001 (gRPC).
-API-key authentication is required. Create a key using the pod's bucket identity:
+API-key authentication is required.
+{{ if .Values.auth.existingSecret }}
+The key in Secret {{ .Values.auth.existingSecret }} is registered and ready{{ if .Values.auth.namespace }}, bound to namespace {{ .Values.auth.namespace | quote }}{{ end }}.
+Applications read it from that Secret. Nothing further has to be created by hand.
+{{- else }}
+No key Secret was configured, so no key exists yet. Create one now:
 
   kubectl -n {{ .Release.Namespace }} exec deployment/{{ .Release.Name }} -- polign-apikey -store {{ .Values.store.uri | quote }} create -namespace recall-demo
 
-Save the key securely; only its hash is retained. For local access:
+Save it securely; only its hash is retained. To avoid this step, generate a key
+with "polign-apikey generate", put it in a Secret, and set auth.existingSecret.
+The server then registers it at startup and the install needs no follow-up.
+{{- end }}
+
+For local access:
 
   kubectl -n {{ .Release.Namespace }} port-forward service/{{ .Release.Name }} 23100:23000
 
@@ -12,3 +22,4 @@ For TLS, the certificate must cover the hostname you use and be trusted by your 
 
 This chart supports one server. Upgrades use Recreate and briefly interrupt service.
 Uninstalling the chart does not delete bucket data or an existing PVC.
+Startup restore must finish within {{ mul .Values.startupProbe.periodSeconds .Values.startupProbe.failureThreshold }}s or the pod restarts; raise startupProbe.failureThreshold for a large store.

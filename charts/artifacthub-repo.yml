@@ -1,0 +1,12 @@
+# Artifact Hub repository metadata. Pushed to the chart's OCI repository under
+# the reserved tag artifacthub.io by the chart-release workflow, which is how
+# Artifact Hub verifies that this publisher owns the repository.
+#
+# repositoryID is issued by Artifact Hub when the repository is first added at
+# https://artifacthub.io/control-panel/repositories. It is not a secret. Until
+# it is filled in the listing still works; only the Verified Publisher badge
+# waits on it.
+repositoryID: ""
+owners:
+  - name: Polign
+    email: connect-us@polign.com

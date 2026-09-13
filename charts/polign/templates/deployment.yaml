@@ -63,6 +63,12 @@ spec:
             - -tls-cert=/tls/tls.crt
             - -tls-key=/tls/tls.key
             {{- end }}
+            {{- if .Values.auth.existingSecret }}
+            - -bootstrap-key-file=/auth/{{ .Values.auth.secretKey }}
+            {{- if .Values.auth.namespace }}
+            - -bootstrap-key-namespace={{ .Values.auth.namespace }}
+            {{- end }}
+            {{- end }}
           ports:
             - {name: http, containerPort: 23000}
             - {name: grpc, containerPort: 23001}
@@ -84,8 +90,8 @@ spec:
               path: /readyz
               port: http
               scheme: {{ ternary "HTTPS" "HTTP" (not (empty .Values.tls.existingSecret)) }}
-            periodSeconds: 5
-            failureThreshold: 120
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
             timeoutSeconds: 2
           readinessProbe:
             httpGet:
@@ -114,6 +120,9 @@ spec:
             {{- if .Values.tls.existingSecret }}
             - {name: tls, mountPath: /tls, readOnly: true}
             {{- end }}
+            {{- if .Values.auth.existingSecret }}
+            - {name: bootstrap-key, mountPath: /auth, readOnly: true}
+            {{- end }}
       volumes:
         - name: cache
           emptyDir:
@@ -130,6 +139,12 @@ spec:
         - name: tls
           secret:
             secretName: {{ .Values.tls.existingSecret }}
+        {{- end }}
+        {{- if .Values.auth.existingSecret }}
+        - name: bootstrap-key
+          secret:
+            secretName: {{ .Values.auth.existingSecret }}
+            defaultMode: 0400
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

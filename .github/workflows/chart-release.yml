@@ -10,11 +10,14 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write # Keyless signing: no long-lived key to hold or rotate.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: sigstore/cosign-installer@v3
+      - uses: oras-project/setup-oras@v1
       - run: bash scripts/kubernetes-tools.sh "$RUNNER_TEMP/tools"
       - run: echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
       - run: python -m pip install PyYAML
@@ -30,18 +33,43 @@ jobs:
           helm lint charts/polign --set store.uri=s3://test-bucket/polign
           python tests/kubernetes/chart.py
       - name: Package and publish
+        id: publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="${GITHUB_REF_NAME#polign-chart-v}"
           helm package charts/polign --destination "$RUNNER_TEMP"
           printf '%s' "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          helm push "$RUNNER_TEMP/polign-$version.tgz" oci://ghcr.io/polign/charts
+          helm push "$RUNNER_TEMP/polign-$version.tgz" oci://ghcr.io/polign/charts 2>&1 | tee "$RUNNER_TEMP/push.log"
+          # Sign and verify by digest, never by tag: a tag can be moved later.
+          digest=$(sed -n 's/^Digest: *//p' "$RUNNER_TEMP/push.log" | tr -d '[:space:]')
+          case "$digest" in
+            sha256:*) ;;
+            *) echo "helm push did not report a digest" >&2; exit 1 ;;
+          esac
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
           gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/polign-$version.tgz" \
             --title "Polign Helm chart $version" --notes-file charts/polign/CHANGELOG.md --latest=false
-      - name: Verify anonymous chart download
+      - name: Sign the chart
+        run: cosign sign --yes "ghcr.io/polign/charts/polign@${{ steps.publish.outputs.digest }}"
+      - name: Publish Artifact Hub repository metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Artifact Hub reads this from the reserved artifacthub.io tag to
+          # confirm who owns the repository. Pushed from the file's own
+          # directory so the layer title is the bare filename it expects.
+          printf '%s' "$GH_TOKEN" | oras login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          cd charts
+          oras push "ghcr.io/polign/charts/polign:artifacthub.io" \
+            --config /dev/null:application/vnd.cncf.artifacthub.config.v1+yaml \
+            artifacthub-repo.yml:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml
+      - name: Verify anonymous download and signature
         run: |
           version="${GITHUB_REF_NAME#polign-chart-v}"
           mkdir -p "$RUNNER_TEMP/verify"
           HELM_REGISTRY_CONFIG="$RUNNER_TEMP/anonymous.json" helm pull oci://ghcr.io/polign/charts/polign \
             --version "$version" --destination "$RUNNER_TEMP/verify"
+          cosign verify "ghcr.io/polign/charts/polign@${{ steps.publish.outputs.digest }}" \
+            --certificate-identity-regexp '^https://github\.com/Polign/polign/\.github/workflows/chart-release\.yml@' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com

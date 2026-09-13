@@ -19,8 +19,24 @@ podLabels: {}
 podAnnotations: {}
 env: [] # Kubernetes EnvVar entries; use valueFrom.secretKeyRef for credentials.
 envFrom: [] # Existing Secret / ConfigMap references.
+auth:
+  # Secret holding one API key that the server registers at startup, so an
+  # install needs no key minted by hand afterwards and can be driven entirely
+  # from manifests. Create the key with `polign-apikey generate`, which needs
+  # neither a cluster nor a bucket, and keep it wherever you keep secrets.
+  # Adoption is idempotent, and a restart can never rebind an existing key.
+  existingSecret: ""
+  secretKey: api-key # Key within that Secret holding the credential.
+  namespace: "" # Bind the key to one namespace; empty reaches them all.
 tls:
   existingSecret: "" # kubernetes.io/tls Secret; enables TLS on both listeners.
+startupProbe:
+  # Startup restore and write-log catch-up must finish within
+  # periodSeconds * failureThreshold. A store that takes longer never becomes
+  # ready: the pod is killed and restarts into the same replay, for ever. Raise
+  # this above the restore time your store actually takes.
+  periodSeconds: 5
+  failureThreshold: 360
 cache:
   bytes: 1073741824
   sizeLimit: 2Gi
