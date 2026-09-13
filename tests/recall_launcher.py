@@ -31,5 +31,20 @@ class LauncherTests(unittest.TestCase):
             self.assertEqual(result.stdout.splitlines(), ["mcp -memory-only -write", "http://localhost:23100", "existing-memory"])
 
 
+    def test_unrunnable_launcher_stops_instead_of_finding_another_database(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "launch").write_text("#!/bin/sh\nprintf '%s\\n' saved-connection\n")
+            (root / "launch").chmod(0o600)  # present, not executable
+            cli = root / "polign"
+            cli.write_text("#!/bin/sh\nif [ \"$2\" = '-help' ]; then echo '-memory-only' >&2; exit 0; fi\nprintf other-database\n")
+            cli.chmod(0o700)
+            env = os.environ | {"POLIGN_RECALL_HOME": tmp, "POLIGN_BIN": str(cli)}
+            result = subprocess.run(["/bin/sh", str(START)], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertNotIn("other-database", result.stdout)
+            self.assertIn("cannot execute it", result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

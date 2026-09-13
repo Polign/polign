@@ -3,10 +3,14 @@
 Memory that survives sessions, accepts corrections, and keeps its history.
 Recall is v0.3.0. The Claude plugin and Polign binaries have separate versions.
 
-## Simplified setup (in development)
+## Setup
 
-This flow requires a Polign build containing `recall setup`; it is not in the
-published v0.6.5 binaries yet. Install Claude Code first, then run:
+**Which flow applies to you.** One command sets everything up, but `polign
+recall setup` is not in the published v0.6.5 binaries yet. On v0.6.4 or v0.6.5,
+skip to [starting the database yourself](#on-polign-v064-and-v065). Check with
+`polign -version`.
+
+Install Claude Code first, then run:
 
 ```sh
 polign recall setup
@@ -79,10 +83,10 @@ memories. Restart Claude after fixing a connection that Claude has cached as
 failed, then inspect `/mcp`. Run `claude update` if Claude reports that its model
 requires a newer client; setup cannot predict future model requirements.
 
-## Published versions and manual setup
+## On Polign v0.6.4 and v0.6.5
 
-The published plugin works with Polign v0.6.4+ and Recall v0.3.0. Until simplified
-setup is released, start a database yourself:
+The published plugin works with Polign v0.6.4+ and Recall v0.3.0. Until the
+setup command is released, start a database yourself:
 
 ```sh
 polign-server -store fs:./recall-data
