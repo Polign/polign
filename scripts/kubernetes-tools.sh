@@ -22,7 +22,8 @@ root=pathlib.Path(sys.argv[1])
 for name in ('helm', 'kind'):
     artifact=root/('helm.tar.gz' if name=='helm' else 'kind')
     expected=(root/(name+'.sha256')).read_text().split()[0]
-    assert hashlib.sha256(artifact.read_bytes()).hexdigest()==expected, name+' checksum mismatch'
+    if hashlib.sha256(artifact.read_bytes()).hexdigest()!=expected:
+        raise SystemExit(name+' checksum mismatch')
 with tarfile.open(root/'helm.tar.gz') as archive:
     (root/'helm').write_bytes(archive.extractfile(sys.argv[2]+'-'+sys.argv[3]+'/helm').read())
 for name in ('helm', 'kind'):
