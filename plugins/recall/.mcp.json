@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "recall": {
-      "command": "polign",
-      "args": ["mcp", "-memory-only", "-write"]
+      "command": "/bin/sh",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/start.sh"]
     }
   }
 }
