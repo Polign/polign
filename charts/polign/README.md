@@ -5,6 +5,30 @@ persistence and maintenance; Recall and other clients connect to its HTTP API.
 Requires Polign 0.6.6+, Helm 3.22+, and Kubernetes 1.30+.
 The recovery suite runs on Kubernetes 1.35.8.
 
+## Try it
+
+Nothing outside the cluster is needed: no bucket, no cloud identity, no Polign
+tooling installed locally. A key is a prefix and two random values, so any
+source of randomness makes one.
+
+```sh
+kubectl create namespace polign
+kubectl -n polign create secret generic polign-key \
+  --from-literal=api-key="plgn_$(openssl rand -hex 8)_$(openssl rand -hex 32)"
+helm install polign oci://ghcr.io/polign/charts/polign --version 0.2.0 \
+  --namespace polign --set store.claim.create=true --set auth.existingSecret=polign-key --wait
+```
+
+`store.claim.create` asks the chart to provision its own volume and defaults the
+store to the local filesystem. Helm cannot delete that volume, so uninstalling
+never destroys the data and reinstalling recovers it.
+
+This is for evaluation. It gives up the property the product is built on, where
+the bucket holds the data and any node can be replaced without losing it. For
+anything you intend to keep, use a bucket.
+
+If you have the Polign CLI, `polign-apikey generate` produces a key the same way.
+
 ## Install with a bucket
 
 Prepare a bucket/prefix and a workload identity that can read, write, list and
@@ -34,28 +58,24 @@ use the same `serviceAccount.annotations`, `podLabels`, and `env` values with
 remains the cluster administrator's responsibility; the chart creates no cloud
 resources or Kubernetes RoleBindings.
 
-Create the API key before installing. `generate` needs no cluster and no
-bucket, so the key can come from whatever already manages your secrets:
+Create the API key before installing. It never has to leave your secret
+manager, and making one needs neither a cluster nor a bucket:
 
 ```sh
 kubectl create namespace polign
 kubectl -n polign create secret generic polign-key \
-  --from-literal=api-key="$(polign-apikey generate)"
+  --from-literal=api-key="plgn_$(openssl rand -hex 8)_$(openssl rand -hex 32)"
 ```
 
-Name that Secret in your values and the server registers the key when it starts:
-
-```yaml
-auth:
-  existingSecret: polign-key
-  namespace: recall   # optional: bind the key to one namespace
-```
+Then install, naming that Secret. The server registers the key as it starts:
 
 ```sh
 helm install polign oci://ghcr.io/polign/charts/polign \
-  --version 0.2.0 --namespace polign \
-  -f polign-values.yaml --wait --timeout 10m
+  --version 0.2.0 --namespace polign -f polign-values.yaml \
+  --set auth.existingSecret=polign-key --wait --timeout 10m
 ```
+
+Add `--set auth.namespace=recall` to bind the key to one namespace.
 
 That is the whole install. Adoption is idempotent, so restarts and upgrades
 re-check the same key rather than minting another, and a restart can never
@@ -65,28 +85,6 @@ values and source control.
 
 Leaving `auth.existingSecret` empty keeps the older behaviour, where no key
 exists until you create one against the running pod.
-
-The same chart is attached to the
-[chart release](https://github.com/Polign/polign/releases/tag/polign-chart-v0.2.0)
-as `polign-0.2.0.tgz`, and can be installed from that downloaded file.
-
-The chart and its image are held in a public registry rather than a single
-cloud's catalog, so the same command installs on EKS, GKE, AKS, on-premises,
-and any other conformant cluster. Nothing in the chart depends on a particular
-cloud; the store URI and the service account annotations are what change.
-
-Every published chart is signed with Sigstore, with no key for anyone to hold
-or leak. Verify it before installing, and prefer the digest over the tag, since
-a tag can be moved later:
-
-```sh
-cosign verify ghcr.io/polign/charts/polign:0.2.0 \
-  --certificate-identity-regexp '^https://github\.com/Polign/polign/\.github/workflows/chart-release\.yml@' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com
-```
-
-A signature proves this repository's release workflow published the chart. It
-is not a statement that the configuration you supply is safe.
 
 For S3-compatible stores, provide `AWS_ENDPOINT_URL_S3` and
 `AWS_S3_FORCE_PATH_STYLE=true`. Static credentials, when needed, belong in an
@@ -167,28 +165,40 @@ the same store configuration to recover. A Helm rollback changes manifests;
 it does not roll back database writes or promise storage-format compatibility
 with an older binary.
 
-## Local cluster demo with a PVC
+## Filesystem storage
 
-For kind or a cluster without a cloud bucket, create a PVC separately. The chart
-does not own it, so Helm uninstall cannot delete it:
+`store.claim.create=true` provisions the volume, which is what the quickstart
+above uses. Size it with `store.claim.size` and pick a class with
+`store.claim.storageClass`. To manage the volume yourself instead, create the
+claim first and name it in `store.existingClaim`; set one or the other, never
+both. Either way the volume must allow writes by UID and GID 65532, which is
+the fsGroup the pod requests.
 
-```yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: polign-data
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: 10Gi
+Durability here is the volume's, not the bucket's. A kind volume survives pod
+replacement but disappears with the cluster.
+
+## Where the chart comes from
+
+The chart and its image live in a public registry rather than one cloud's
+catalog, so the same command installs on EKS, GKE, AKS, on-premises, and any
+other conformant cluster. Nothing in the chart is cloud-specific; the store URI
+and the service account annotations are what change. The packaged chart is also
+attached to the
+[chart release](https://github.com/Polign/polign/releases/tag/polign-chart-v0.2.0)
+as `polign-0.2.0.tgz`.
+
+Every published chart is signed with Sigstore, with no key for anyone to hold or
+leak. Verifying is optional but cheap, and the digest is stronger than the tag
+because a tag can be moved later:
+
+```sh
+cosign verify ghcr.io/polign/charts/polign:0.2.0 \
+  --certificate-identity-regexp '^https://github\.com/Polign/polign/\.github/workflows/chart-release\.yml@' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-Apply it in the deployment namespace, then install with
-`--set store.uri=fs:/var/lib/polign --set store.existingClaim=polign-data`.
-The volume must support writes by UID/GID 65532; the pod requests that fsGroup.
-This mode's durability depends on the PVC and its underlying storage. A kind
-volume survives pod replacement, but deleting the kind cluster removes it.
+A signature proves this repository's release workflow published the chart. It
+says nothing about whether the configuration you supply is safe.
 
 ## Validation
 

@@ -1,0 +1,22 @@
+{{- if .Values.store.claim.create }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "polign.claimName" . }}
+  labels:
+    {{- include "polign.labels" . | nindent 4 }}
+  annotations:
+    # Helm must never be able to delete durable data. With this policy an
+    # uninstall leaves the claim and its contents behind, so a reinstall
+    # recovers and a mistaken `helm uninstall` costs nothing. Deleting the data
+    # stays a deliberate, separate act.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.store.claim.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.store.claim.size | quote }}
+{{- end }}

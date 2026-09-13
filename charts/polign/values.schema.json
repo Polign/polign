@@ -41,10 +41,26 @@
       "properties": {
         "uri": {
           "type": "string",
-          "pattern": "^(s3://[^/\\s,]+/[^\\s,]*|gcs://[^/\\s,]+/[^\\s,]*|az://[^/\\s,]+/[^/\\s,]+/[^\\s,]*|fs:/var/lib/polign)$"
+          "pattern": "^($|s3://[^/\\s,]+/[^\\s,]*|gcs://[^/\\s,]+/[^\\s,]*|az://[^/\\s,]+/[^/\\s,]+/[^\\s,]*|fs:/var/lib/polign)$"
         },
         "existingClaim": {
           "type": "string"
+        },
+        "claim": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "create": {
+              "type": "boolean"
+            },
+            "size": {
+              "type": "string",
+              "minLength": 1
+            },
+            "storageClass": {
+              "type": "string"
+            }
+          }
         }
       }
     },

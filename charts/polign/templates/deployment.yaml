@@ -1,9 +1,13 @@
-{{- $store := required "Set store.uri to your bucket URI" .Values.store.uri -}}
-{{- if and (hasPrefix "fs:" $store) (not .Values.store.existingClaim) -}}
-{{- fail "A filesystem store requires store.existingClaim; durable data cannot use emptyDir" -}}
+{{- $store := include "polign.store" . -}}
+{{- $claim := or .Values.store.existingClaim .Values.store.claim.create -}}
+{{- if and (hasPrefix "fs:" $store) (not $claim) -}}
+{{- fail "A filesystem store needs a volume: set store.claim.create=true, or store.existingClaim to one you manage. Durable data cannot use emptyDir" -}}
 {{- end -}}
-{{- if and (not (hasPrefix "fs:" $store)) .Values.store.existingClaim -}}
-{{- fail "store.existingClaim is only used with fs:/var/lib/polign" -}}
+{{- if and (not (hasPrefix "fs:" $store)) $claim -}}
+{{- fail "store.existingClaim and store.claim.create apply only to fs:/var/lib/polign; a bucket store needs neither" -}}
+{{- end -}}
+{{- if and .Values.store.existingClaim .Values.store.claim.create -}}
+{{- fail "Set either store.existingClaim or store.claim.create, not both" -}}
 {{- end -}}
 apiVersion: apps/v1
 kind: Deployment
@@ -114,7 +118,7 @@ spec:
           volumeMounts:
             - {name: cache, mountPath: /cache}
             - {name: tmp, mountPath: /tmp}
-            {{- if .Values.store.existingClaim }}
+            {{- if $claim }}
             - {name: data, mountPath: /var/lib/polign}
             {{- end }}
             {{- if .Values.tls.existingSecret }}
@@ -130,10 +134,10 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
-        {{- if .Values.store.existingClaim }}
+        {{- if $claim }}
         - name: data
           persistentVolumeClaim:
-            claimName: {{ .Values.store.existingClaim }}
+            claimName: {{ include "polign.claimName" . }}
         {{- end }}
         {{- if .Values.tls.existingSecret }}
         - name: tls

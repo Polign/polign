@@ -26,8 +26,32 @@ for invalid in [
     {'store': {'uri': 's3://bucket/data'}, 'startupProbe': {'failureThreshold': 1}},
     {'store': {'uri': 's3://bucket/data'}, 'auth': {'secretKey': ''}},
     {'store': {'uri': 's3://bucket/data'}, 'auth': {'unknown': 'x'}},
+    # A provisioned volume applies only to a filesystem store, is never
+    # combined with one the operator already manages, and never silently
+    # replaces a bucket.
+    {'store': {'uri': 's3://bucket/data', 'claim': {'create': True}}},
+    {'store': {'uri': 'fs:/var/lib/polign', 'existingClaim': 'data', 'claim': {'create': True}}},
+    {'store': {'claim': {'create': True, 'size': ''}}},
 ]:
     render(invalid, ok=False)
+
+# Evaluating must need no bucket and no cloud identity, which is the only part
+# of an install that cannot be done from inside the cluster. Helm must still be
+# unable to delete the data it provisions.
+evaluation = [d for d in render({'store': {'claim': {'create': True}}}) if d]
+claim = next(d for d in evaluation if d['kind'] == 'PersistentVolumeClaim')
+assert claim['metadata']['annotations']['helm.sh/resource-policy'] == 'keep', \
+    'an uninstall must not be able to destroy the volume the chart created'
+eval_spec = next(d for d in evaluation if d['kind'] == 'Deployment')['spec']['template']['spec']
+assert '-store=fs:/var/lib/polign' in eval_spec['containers'][0]['args']
+assert next(v for v in eval_spec['volumes'] if v['name'] == 'data')['persistentVolumeClaim']['claimName'] == claim['metadata']['name']
+assert any(m['mountPath'] == '/var/lib/polign' for m in eval_spec['containers'][0]['volumeMounts'])
+
+# Any volume this chart ever emits carries that policy, whatever the values.
+for values in [{'store': {'claim': {'create': True}}},
+               {'store': {'uri': 'fs:/var/lib/polign', 'claim': {'create': True, 'size': '50Gi', 'storageClass': 'gp3'}}}]:
+    for doc in [d for d in render(values) if d and d['kind'] == 'PersistentVolumeClaim']:
+        assert doc['metadata']['annotations'].get('helm.sh/resource-policy') == 'keep'
 
 # A supplied key must reach the server as a read-only file, never as an
 # argument or an environment variable, and must leave the install with nothing
@@ -77,10 +101,10 @@ for uri, extra in [
     assert container['startupProbe']['httpGet']['path'] == '/readyz'
     assert container['readinessProbe']['httpGet']['path'] == '/readyz'
     assert container['livenessProbe']['httpGet']['path'] == '/healthz'
-    assert all(d['kind'] != 'PersistentVolumeClaim' for d in docs), 'chart must not own/delete durable volumes'
+    assert all(d['kind'] != 'PersistentVolumeClaim' for d in docs), 'a volume must be provisioned only when asked for'
     if uri.startswith('fs:'):
         assert next(v for v in spec['volumes'] if v['name'] == 'data')['persistentVolumeClaim']['claimName'] == 'data'
     if extra.get('tls'):
         assert container['readinessProbe']['httpGet']['scheme'] == 'HTTPS'
         assert spec['serviceAccountName'] == 'workload'
-print('PASS: chart rejects unsafe storage/replica/startup/auth configurations, adopts a supplied key without RBAC or a hook, and renders all storage, identity and TLS profiles')
+print('PASS: chart rejects unsafe storage/replica/startup/auth/volume configurations, evaluates with no bucket while keeping the volume it provisions, adopts a supplied key without RBAC or a hook, and renders all storage, identity and TLS profiles')

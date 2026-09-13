@@ -23,3 +23,23 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}
 {{- end -}}
 {{- end }}
+{{/*
+polign.store resolves the store URI, defaulting to the local filesystem when the
+chart is asked to provision its own volume. That default is what lets someone
+try Polign without first creating a bucket and a cloud identity, which is the
+only part of an install that cannot be done from inside Kubernetes.
+*/}}
+{{- define "polign.store" -}}
+{{- if and .Values.store.claim.create (not .Values.store.uri) -}}
+fs:/var/lib/polign
+{{- else -}}
+{{ required "Set store.uri to your bucket URI, or store.claim.create=true to evaluate on a local volume" .Values.store.uri }}
+{{- end -}}
+{{- end }}
+{{- define "polign.claimName" -}}
+{{- if .Values.store.existingClaim -}}
+{{ .Values.store.existingClaim }}
+{{- else -}}
+{{ .Release.Name }}-data
+{{- end -}}
+{{- end }}

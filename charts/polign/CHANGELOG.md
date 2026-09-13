@@ -2,6 +2,18 @@
 
 Requires Polign 0.6.6 or newer, for the server flag that adopts a supplied key.
 
+- `store.claim.create` provisions the volume, so Polign can be evaluated with no
+  bucket, no cloud identity and nothing installed locally. It defaults the store
+  to the local filesystem, and the claim carries Helm's keep policy, so an
+  uninstall cannot destroy the data and a reinstall recovers it. This trades
+  away the durability model the product is built on, where the bucket holds the
+  data and any node can be replaced, so the post-install notes say so whenever
+  it is used. Managing the volume yourself through `store.existingClaim` still
+  works; set one or the other, never both.
+- Shorter documented install. A key is now made with any source of randomness
+  rather than by installing the Polign CLI first, the simple path uses install
+  flags instead of a values file, and signature verification moved out of the
+  install steps into its own section, since it is optional.
 - Supply the API key from a Secret through `auth.existingSecret` and the server
   registers it at startup. Installing is now one declarative step instead of a
   Helm command followed by an operator running a mint command against the pod
@@ -28,6 +40,8 @@ Requires Polign 0.6.6 or newer, for the server flag that adopts a supplied key.
   Signing and verification use the digest rather than the tag.
 - Claim repository ownership through the reserved `artifacthub.io` tag in the
   chart's OCI repository.
+
+Try it: `helm install polign oci://ghcr.io/polign/charts/polign --version 0.2.0 --namespace polign --set store.claim.create=true --set auth.existingSecret=polign-key`
 
 Install: `helm install polign oci://ghcr.io/polign/charts/polign --version 0.2.0 --set store.uri=s3://your-bucket/polign --set auth.existingSecret=polign-key`
 

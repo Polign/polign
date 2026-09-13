@@ -8,8 +8,16 @@ image:
 imagePullSecrets: []
 store:
   uri: "" # Required: s3://bucket/prefix, gcs://bucket/prefix, or az://account/container/prefix.
-  # For a local demo only: uri=fs:/var/lib/polign and a pre-created PVC.
-  existingClaim: ""
+  existingClaim: "" # A PersistentVolumeClaim you created, for an fs: store.
+  claim:
+    # Let the chart provision the volume instead, which needs no bucket and no
+    # cloud identity, and defaults store.uri to fs:/var/lib/polign. Good for
+    # trying Polign; it gives up the durability model the product is built on,
+    # where the bucket holds the data and any node can be replaced. Helm cannot
+    # delete the claim it creates, so uninstalling never destroys data.
+    create: false
+    size: 10Gi
+    storageClass: "" # Empty uses the cluster default.
 serviceAccount:
   create: true
   name: ""

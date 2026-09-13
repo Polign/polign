@@ -20,6 +20,13 @@ For local access:
 Set POLIGN_URL={{ ternary "https" "http" (not (empty .Values.tls.existingSecret)) }}://127.0.0.1:23100 and POLIGN_API_KEY in the environment of your Recall client.
 For TLS, the certificate must cover the hostname you use and be trusted by your client.
 
+{{- if .Values.store.claim.create }}
+
+This deployment stores data on the volume {{ include "polign.claimName" . }}, not in a bucket, so its
+durability is that volume's. That is fine for evaluation. Move to a bucket for
+anything you intend to keep.
+{{- end }}
+
 This chart supports one server. Upgrades use Recreate and briefly interrupt service.
-Uninstalling the chart does not delete bucket data or an existing PVC.
+Uninstalling the chart does not delete bucket data or any volume it provisioned.
 Startup restore must finish within {{ mul .Values.startupProbe.periodSeconds .Values.startupProbe.failureThreshold }}s or the pod restarts; raise startupProbe.failureThreshold for a large store.
