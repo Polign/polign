@@ -2,7 +2,7 @@
 
 Run Polign against your own bucket. The chart deploys one server with embedded
 persistence and maintenance; Recall and other clients connect to its HTTP API.
-Requires Polign 0.6.5+, Helm 3.22+, and Kubernetes 1.30+.
+Requires Polign 0.6.6+, Helm 3.22+, and Kubernetes 1.30+.
 The recovery suite runs on Kubernetes 1.35.8.
 
 ## Install with a bucket
