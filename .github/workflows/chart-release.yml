@@ -32,6 +32,14 @@ jobs:
           PY
           helm lint charts/polign --set store.uri=s3://test-bucket/polign
           python tests/kubernetes/chart.py
+      # cosign and oras read the Docker credential store, which
+      # `helm registry login` does not write to. Without this they fail at the
+      # point of pushing, after the chart is already published.
+      - name: Authenticate to the registry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
       - name: Package and publish
         id: publish
         env:
@@ -48,8 +56,14 @@ jobs:
             *) echo "helm push did not report a digest" >&2; exit 1 ;;
           esac
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/polign-$version.tgz" \
-            --title "Polign Helm chart $version" --notes-file charts/polign/CHANGELOG.md --latest=false
+          # Idempotent, so re-running this tag after a later step fails does not
+          # stop at an already-created release.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/polign-$version.tgz" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/polign-$version.tgz" \
+              --title "Polign Helm chart $version" --notes-file charts/polign/CHANGELOG.md --latest=false
+          fi
       - name: Sign the chart
         run: cosign sign --yes "ghcr.io/polign/charts/polign@${{ steps.publish.outputs.digest }}"
       - name: Publish Artifact Hub repository metadata
@@ -59,7 +73,6 @@ jobs:
           # Artifact Hub reads this from the reserved artifacthub.io tag to
           # confirm who owns the repository. Pushed from the file's own
           # directory so the layer title is the bare filename it expects.
-          printf '%s' "$GH_TOKEN" | oras login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           cd charts
           oras push "ghcr.io/polign/charts/polign:artifacthub.io" \
             --config /dev/null:application/vnd.cncf.artifacthub.config.v1+yaml \
