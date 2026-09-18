@@ -1,0 +1,57 @@
+{
+  "name": {
+    "cardinality": "single",
+    "value_type": "string",
+    "description": "The name the caller asks to be called"
+  },
+  "preferred_language": {
+    "cardinality": "single",
+    "value_type": "string",
+    "description": "The language the caller wants to speak"
+  },
+  "callback_number": {
+    "cardinality": "single",
+    "value_type": "string",
+    "description": "The phone number the caller wants to be called back on"
+  },
+  "email": {
+    "cardinality": "single",
+    "value_type": "string",
+    "description": "The email address the caller wants written follow-ups sent to"
+  },
+  "timezone": {
+    "cardinality": "single",
+    "value_type": "string",
+    "description": "The caller's timezone or city, for scheduling"
+  },
+  "account_tier": {
+    "cardinality": "single",
+    "value_type": "string",
+    "description": "The plan or membership level the caller is on"
+  },
+  "consents_to_recording": {
+    "cardinality": "single",
+    "value_type": "boolean",
+    "description": "Whether the caller agreed to have calls recorded"
+  },
+  "prefers_response_style": {
+    "cardinality": "single",
+    "value_type": "string",
+    "description": "How the caller likes answers, such as brief or step by step"
+  },
+  "open_issue": {
+    "cardinality": "multi",
+    "value_type": "string",
+    "description": "A problem the caller reported that is not resolved yet"
+  },
+  "owns_product": {
+    "cardinality": "multi",
+    "value_type": "string",
+    "description": "A product or service the caller owns or subscribes to"
+  },
+  "uses_technology": {
+    "cardinality": "multi",
+    "value_type": "string",
+    "description": "A device, platform, or tool the caller uses"
+  }
+}
