@@ -4,6 +4,7 @@ name: python-publish
 #   python/vX.Y.Z     -> the `polign` client               (python/)
 #   langchain/vX.Y.Z  -> `langchain-polign`                 (python/langchain-polign/)
 #   llamaindex/vX.Y.Z -> `llama-index-vector-stores-polign` (python/llama-index-vector-stores-polign/)
+#   livekit/vX.Y.Z    -> `recall-livekit`                    (python/recall-livekit/)
 # Server releases use bare `vX.Y.Z` tags created by the release pipeline in
 # the private source repository; the prefixes keep the tag lines apart.
 #
@@ -13,7 +14,7 @@ name: python-publish
 
 on:
   push:
-    tags: ["python/v*", "langchain/v*", "llamaindex/v*"]
+    tags: ["python/v*", "langchain/v*", "llamaindex/v*", "livekit/v*"]
 
 permissions:
   contents: read
@@ -47,6 +48,10 @@ jobs:
                           echo "PKG_VERSION=${GITHUB_REF_NAME#llamaindex/v}" >> "$GITHUB_ENV"
                           echo "PKG_INIT=" >> "$GITHUB_ENV"
                           echo "PKG_MARKER=llama_index/vector_stores/polign/base.py" >> "$GITHUB_ENV" ;;
+            livekit/v*)   echo "PKG_DIR=python/recall-livekit" >> "$GITHUB_ENV"
+                          echo "PKG_VERSION=${GITHUB_REF_NAME#livekit/v}" >> "$GITHUB_ENV"
+                          echo "PKG_INIT=" >> "$GITHUB_ENV"
+                          echo "PKG_MARKER=recall_livekit/agent.py" >> "$GITHUB_ENV" ;;
             *)            echo "::error::unexpected tag ${GITHUB_REF_NAME}"; exit 1 ;;
           esac
 

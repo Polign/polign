@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "recall-livekit"
+version = "0.1.0"
+description = "Typed, correctable long-term memory for LiveKit voice agents, backed by Recall by Polign"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "Polign" }]
+keywords = ["livekit", "voice agent", "agent memory", "recall", "polign"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: Apache Software License",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "polign-recall>=0.2.0",
+    "livekit-agents>=1.8,<2",
+]
+
+[project.urls]
+Homepage = "https://polign.com"
+Documentation = "https://polign.com/integrations.html"
+Repository = "https://github.com/Polign/polign"
+Issues = "https://github.com/Polign/polign/issues"
+
+[tool.hatch.build]
+ignore-vcs = true
+
+[tool.hatch.build.targets.sdist]
+include = ["recall_livekit/", "tests/", "README.md", "LICENSE"]
+exclude = ["**/__pycache__", "**/.pytest_cache"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["recall_livekit"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
