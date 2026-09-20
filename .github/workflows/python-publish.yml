@@ -5,6 +5,9 @@ name: python-publish
 #   langchain/vX.Y.Z  -> `langchain-polign`                 (python/langchain-polign/)
 #   llamaindex/vX.Y.Z -> `llama-index-vector-stores-polign` (python/llama-index-vector-stores-polign/)
 #   livekit/vX.Y.Z    -> `recall-livekit`                    (python/recall-livekit/)
+#   polign-db/vX.Y.Z  -> `polign-db`, the server and CLI binaries as platform
+#                        wheels (python/polign-db/). X.Y.Z is the server release
+#                        being repackaged; X.Y.Z.postN repackages it again.
 # Server releases use bare `vX.Y.Z` tags created by the release pipeline in
 # the private source repository; the prefixes keep the tag lines apart.
 #
@@ -14,13 +17,14 @@ name: python-publish
 
 on:
   push:
-    tags: ["python/v*", "langchain/v*", "llamaindex/v*", "livekit/v*"]
+    tags: ["python/v*", "langchain/v*", "llamaindex/v*", "livekit/v*", "polign-db/v*"]
 
 permissions:
   contents: read
 
 jobs:
   pypi:
+    if: ${{ !startsWith(github.ref_name, 'polign-db/') }}
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -88,4 +92,63 @@ jobs:
           packages-dir: ${{ env.PKG_DIR }}/dist
           # PyPI uploads are immutable; a re-run of an already published
           # version is left alone instead of failing the job.
+          skip-existing: true
+
+  # The binary wheels are not built from source. The job downloads the server
+  # release's archives, checks the release signature and every checksum, and
+  # repackages `polign` and `polign-server` into one wheel per platform.
+  polign-db:
+    if: ${{ startsWith(github.ref_name, 'polign-db/') }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write # OIDC token for PyPI trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Download the release and verify its signature
+        run: |
+          set -euo pipefail
+          PKG_VERSION="${GITHUB_REF_NAME#polign-db/v}"
+          V="v${PKG_VERSION%%.post*}"
+          echo "PKG_VERSION=${PKG_VERSION}" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/release" && cd "$RUNNER_TEMP/release"
+          BASE="https://github.com/Polign/polign/releases/download/${V}"
+          for f in checksums.txt checksums.txt.sigstore.json \
+                   polign_db_darwin_amd64.tar.gz polign_db_darwin_arm64.tar.gz \
+                   polign_db_linux_amd64.tar.gz polign_db_linux_arm64.tar.gz \
+                   polign_db_windows_amd64.zip polign_db_windows_arm64.zip; do
+            curl -fsSLO "${BASE}/${f}"
+          done
+          cosign verify-blob \
+            --bundle checksums.txt.sigstore.json \
+            --certificate-identity="https://github.com/Polign/polign_db/.github/workflows/release.yml@refs/tags/${V}" \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+            checksums.txt
+
+      # build_wheels.py refuses any archive whose SHA-256 is not the one in the
+      # checksums.txt verified above.
+      - name: Build the wheels
+        run: python python/polign-db/build_wheels.py --version "$PKG_VERSION" --archives "$RUNNER_TEMP/release" --out dist
+
+      - name: Install the Linux wheel and run both binaries
+        run: |
+          set -euo pipefail
+          python -m pip install dist/polign_db-*manylinux2014_x86_64*.whl
+          cd "$RUNNER_TEMP"
+          test "$(python -c 'import polign_db; print(polign_db.__version__)')" = "$PKG_VERSION"
+          polign-server -version
+          "$(python -c 'import polign_db; print(polign_db.find_bin("polign"))')" recall setup -local -no-plugin -config-dir "$RUNNER_TEMP/recall-smoke"
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
           skip-existing: true

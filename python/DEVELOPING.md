@@ -67,3 +67,36 @@ the `pypi` GitHub environment, so there is no token to rotate.
 Bare `vX.Y.Z` tags on this repository are server releases and never publish
 the package. The package version line is independent of the server version;
 document the minimum server version a feature needs in the README instead.
+
+## Releasing the polign-db binary wheels
+
+`polign-db` (in `polign-db/`) is the one package whose version is the server
+version. It has no `pyproject.toml` and nothing to bump: `build_wheels.py`
+downloads a server release's archives, checks them against the release's
+`checksums.txt`, and repackages `polign` and `polign-server` into one wheel per
+platform. After a server release `vX.Y.Z` is out, push a matching tag:
+
+```bash
+git tag polign-db/v0.7.0
+git push origin polign-db/v0.7.0
+```
+
+The `polign-db` job in `python-publish.yml` verifies the release's Sigstore
+signature, builds the six wheels, installs the Linux one, starts a local
+database with it, and uploads. To ship a packaging fix for the same binaries,
+tag a post release such as `polign-db/v0.7.0.post1`.
+
+Each wheel is about 26 MB and PyPI allows a project 10 GB in total, so there is
+room for roughly 60 releases before old ones need deleting or the limit needs
+raising.
+
+To build one wheel locally and try it:
+
+```bash
+python polign-db/build_wheels.py --version 0.7.0 --only polign_db_darwin_arm64.tar.gz --out /tmp/dist
+python -m pip install /tmp/dist/polign_db-*.whl
+```
+
+`polign-recall` (in the Polign/recall repository) depends on `polign-db`, and
+`recall-livekit` depends on `polign-recall`, so a first release goes out in that
+order.

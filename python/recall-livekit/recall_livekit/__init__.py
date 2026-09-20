@@ -34,7 +34,7 @@ try:
 
     __version__ = _version("recall-livekit")
 except Exception:  # pragma: no cover - source checkout without metadata
-    __version__ = "0.1.0"
+    __version__ = "0.2.0"
 
 #: Path of the starter predicate registry for phone and voice callers. Pass it
 #: as ``predicates=`` to :meth:`RecallMemory.open` or set ``POLIGN_PREDICATES``.

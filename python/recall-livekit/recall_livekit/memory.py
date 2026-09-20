@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, TypeVar
@@ -62,6 +63,7 @@ class RecallMemory:
         api_key: str | None = None,
         collection: str | None = None,
         predicates: str | None = None,
+        local_dir: str | os.PathLike[str] | None = None,
         command: Sequence[str] | None = None,
         env: Mapping[str, str] | None = None,
         timeout: float = 30.0,
@@ -69,13 +71,20 @@ class RecallMemory:
     ) -> RecallMemory:
         """Start the Recall subprocess and read its predicate registry.
 
+        ``local_dir`` keeps the database on this machine, in that directory:
+        the first worker process to open it starts a background
+        ``polign-server`` and the others share it. Use ``url`` and ``api_key``
+        instead for a server you run yourself; the two are exclusive.
+
         ``url``, ``api_key``, ``collection`` and ``predicates`` (a registry file
         path) become the ``POLIGN_URL``, ``POLIGN_API_KEY``, ``POLIGN_COLLECTION``
         and ``POLIGN_PREDICATES`` variables of the subprocess; anything left
         unset falls through to the worker's environment. ``command`` replaces
-        the default ``polign mcp -memory-only -write`` argv, for a binary that
-        is not on ``PATH``.
+        the default ``polign mcp -memory-only -write`` argv; the default runs
+        the ``polign`` binary that pip installed with this package.
         """
+        if local_dir is not None and (url is not None or api_key is not None):
+            raise ValueError("local_dir runs its own server; do not pass url or api_key with it")
         merged = dict(env or {})
         for key, value in (
             ("POLIGN_URL", url),
@@ -85,7 +94,7 @@ class RecallMemory:
         ):
             if value is not None:
                 merged[key] = value
-        client = Client(command=command, env=merged, timeout=timeout, write=write)
+        client = Client(command=command, env=merged, timeout=timeout, write=write, local_dir=local_dir)
         try:
             return cls(client)
         except BaseException:

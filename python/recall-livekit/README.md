@@ -14,9 +14,11 @@ service is needed.
 pip install recall-livekit "livekit-agents[openai,deepgram,cartesia,silero]"
 ```
 
-Recall runs as a `polign mcp` subprocess, so the `polign` CLI has to be on the
-worker's `PATH` (or passed as `command=`), and it needs a polign_db server to
-store into. [Get started](https://polign.com/developers.html) covers both.
+That is the whole install. pip also brings the
+[`polign-db`](https://pypi.org/project/polign-db/) package with the `polign`
+CLI and `polign-server` binaries for Linux, macOS and Windows, so there is no
+separate database to download, and a worker image needs nothing beyond
+`pip install`.
 
 ## Usage
 
@@ -31,7 +33,7 @@ server = AgentServer()
 def setup(proc: JobProcess) -> None:
     # one Recall subprocess per worker process
     proc.userdata["recall"] = RecallMemory.open(
-        url="http://memory.internal:23000",   # or POLIGN_URL in the environment
+        local_dir="./recall-data",            # the database lives here
         predicates=VOICE_REGISTRY,            # or your own registry file
     )
 
@@ -75,6 +77,29 @@ whole set fits in the prompt. When a caller has more beliefs than `limit`
 (default 20), each user turn also runs a search and adds matching facts to
 that turn only.
 
+## Where the memory is stored
+
+`local_dir="./recall-data"` keeps the database on the worker's machine. The
+first worker process to open the directory starts a `polign-server` for it in
+the background, listening on localhost only, and every other process shares
+that server. It keeps running between worker restarts; its process id is in
+`recall-data/runtime.json` and its log in `recall-data/server.log`. This is
+the quickest way to try the package and is fine for a single machine. It works
+on Linux and macOS.
+
+Workers on several machines need one shared server. Run `polign-server`
+somewhere they can all reach ([Get started](https://polign.com/developers.html)
+shows how, including storing into S3, GCS or Azure), then connect to it
+instead:
+
+```python
+RecallMemory.open(
+    url="http://memory.internal:23000",   # or POLIGN_URL in the environment
+    api_key=os.environ["POLIGN_API_KEY"],
+    predicates=VOICE_REGISTRY,
+)
+```
+
 ## Your own Agent subclass
 
 ```python
@@ -92,8 +117,9 @@ per-turn search for overflowing callers; use `RecallAgent` for that.
 
 | Where | Option | Default | What it does |
 |---|---|---|---|
+| `RecallMemory.open` | `local_dir` | none | Keep the database in this directory and run its server; exclusive with `url` and `api_key` |
 | `RecallMemory.open` | `url`, `api_key`, `collection`, `predicates` | worker environment | Connection for the subprocess (`POLIGN_URL`, `POLIGN_API_KEY`, `POLIGN_COLLECTION`, `POLIGN_PREDICATES`) |
-| `RecallMemory.open` | `command` | `polign mcp -memory-only -write` | The subprocess argv, for a binary that is not on `PATH` |
+| `RecallMemory.open` | `command` | `polign mcp -memory-only -write` | The subprocess argv, to run a `polign` binary other than the one pip installed |
 | `for_subject` | `limit` | 20 | Beliefs loaded into the prompt; above it, per-turn search kicks in |
 | `for_subject` | `read_timeout`, `write_timeout` | 0.5 s, 5 s | Reads fail open (last known beliefs); writes tell the model the fact was not saved |
 | `RecallAgent` | `context_template` | `<recall_memory>\n{context}\n</recall_memory>` | Wrapper around the block; must contain `{context}` |
@@ -139,4 +165,5 @@ pytest tests/integration_tests -v         # real polign-server and polign CLI
 
 The integration tests locate the binaries like the SDK's tests do
 (`POLIGN_SERVER`, `POLIGN_SOURCE`, `POLIGN_SERVER_VERSION`, or the latest
-release download) and skip when none is found.
+release download) and skip when none is found. To test against the binaries
+pip installed, set `POLIGN_SERVER="$(python -c 'import polign_db; print(polign_db.find_bin("polign-server"))')"`.

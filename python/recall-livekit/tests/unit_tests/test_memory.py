@@ -145,3 +145,28 @@ async def test_render_groups_multi_values_and_lists_kinds(memory):
     assert custom.startswith("MEMORY:\nNothing is remembered")
     with pytest.raises(ValueError):
         render_beliefs([], template="no placeholder")
+
+
+def test_local_dir_is_handed_to_the_client(monkeypatch, tmp_path):
+    seen = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+
+        def predicates(self):
+            return []
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("recall_livekit.memory.Client", FakeClient)
+    with RecallMemory.open(local_dir=tmp_path / "recall-data", predicates="/etc/callers.json"):
+        pass
+    assert seen["local_dir"] == tmp_path / "recall-data"
+    assert seen["env"] == {"POLIGN_PREDICATES": "/etc/callers.json"}
+
+
+def test_local_dir_excludes_a_remote_connection(tmp_path):
+    with pytest.raises(ValueError):
+        RecallMemory.open(local_dir=tmp_path, url="http://memory.internal:23000")

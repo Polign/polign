@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "recall-livekit"
-version = "0.1.0"
+version = "0.2.0"
 description = "Typed, correctable long-term memory for LiveKit voice agents, backed by Recall by Polign"
 readme = "README.md"
 license = "Apache-2.0"
@@ -21,7 +21,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "polign-recall>=0.2.0",
+    "polign-recall>=0.3.0",
     "livekit-agents>=1.8,<2",
 ]
 
