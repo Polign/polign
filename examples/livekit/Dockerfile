@@ -2,7 +2,7 @@
 #
 # The `polign` CLI comes from the published server image, so the worker never
 # downloads anything at build time beyond pip packages. Pin both versions.
-ARG POLIGN_VERSION=0.6.6
+ARG POLIGN_VERSION=0.7.0
 FROM ghcr.io/polign/polign-server:${POLIGN_VERSION} AS polign
 
 FROM python:3.12-slim
