@@ -6,3 +6,7 @@ __pycache__/
 python/dist/
 python/build/
 *.egg-info/
+
+# The LiveKit example: provider keys, and the local Recall database with its key
+examples/livekit/.env
+recall-data/

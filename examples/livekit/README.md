@@ -16,14 +16,11 @@ What it does on a call:
 
 ## Run it
 
-You need a LiveKit project, API keys for the model providers in `agent.py`,
-the `polign` CLI on your `PATH`, and a polign_db server to store into.
+You need a LiveKit project and API keys for the model providers in `agent.py`.
+The memory store needs no setup: pip installs the database with the package,
+and the agent keeps its data in `./recall-data`.
 
 ```bash
-# a local memory store
-polign-server -store fs:/tmp/polign-callers
-
-# the agent
 pip install -r requirements.txt
 cp .env.example .env         # fill it in
 python agent.py console      # talk to it in the terminal
@@ -35,10 +32,12 @@ participant, so use `dev` with a real token to see memory carry across calls.
 
 ## Deploy it
 
-`Dockerfile` builds a worker image with the `polign` CLI copied from the
-published `ghcr.io/polign/polign-server` image. Set `POLIGN_URL` and
-`POLIGN_API_KEY` on the container so the subprocess can reach your memory
-store. LiveKit Cloud deploys from this Dockerfile as is.
+`Dockerfile` builds a worker image with nothing but `pip install`. A
+container's disk does not survive a redeploy, so a deployed worker should
+store into a polign_db server instead of `./recall-data`: set `POLIGN_URL` and
+`POLIGN_API_KEY` on the container and the agent uses that server.
+[Get started](https://polign.com/developers.html) shows how to run one.
+LiveKit Cloud deploys from this Dockerfile as is.
 
 ## Your own predicates
 

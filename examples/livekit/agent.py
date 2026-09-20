@@ -34,9 +34,12 @@ server = AgentServer()
 
 
 def setup(proc: JobProcess) -> None:
-    """One Recall subprocess per worker process. It reads POLIGN_URL,
-    POLIGN_API_KEY and POLIGN_COLLECTION from the environment."""
+    """One Recall subprocess per worker process. With POLIGN_URL set it stores
+    into that server (POLIGN_API_KEY and POLIGN_COLLECTION are read too).
+    Without it, the memory lives in ./recall-data and Recall runs the database
+    itself, so there is nothing to start first."""
     proc.userdata["recall"] = RecallMemory.open(
+        local_dir=None if os.environ.get("POLIGN_URL") else "./recall-data",
         predicates=os.environ.get("POLIGN_PREDICATES", VOICE_REGISTRY),
     )
     proc.userdata["vad"] = silero.VAD.load()

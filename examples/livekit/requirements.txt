@@ -1,4 +1,4 @@
-recall-livekit>=0.1.0
+recall-livekit>=0.2.0
 polign>=0.7.0
 livekit-agents[openai,deepgram,cartesia,silero]>=1.8,<2
 python-dotenv>=1.0

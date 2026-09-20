@@ -1,10 +1,7 @@
 # A LiveKit agent worker with Recall memory.
 #
-# The `polign` CLI comes from the published server image, so the worker never
-# downloads anything at build time beyond pip packages. Pin both versions.
-ARG POLIGN_VERSION=0.7.0
-FROM ghcr.io/polign/polign-server:${POLIGN_VERSION} AS polign
-
+# pip installs everything, including the `polign` CLI that Recall runs (it
+# comes with recall-livekit as the polign_db package).
 FROM python:3.12-slim
 
 # LiveKit agents need a writable home for model downloads (Silero VAD).
@@ -12,8 +9,6 @@ ENV PYTHONUNBUFFERED=1 \
     HOME=/home/appuser
 RUN useradd -m -u 1000 appuser
 WORKDIR /home/appuser/app
-
-COPY --from=polign /usr/local/bin/polign /usr/local/bin/polign
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
