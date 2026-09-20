@@ -130,10 +130,7 @@ docs for retention and export.
 
 ## Development
 
-`polign-recall` is not on PyPI yet, so install it from source first:
-
 ```bash
-python -m pip install "polign-recall @ git+https://github.com/Polign/recall@python-v0.2.0#subdirectory=python"
 cd python/recall-livekit
 python -m pip install -e . pytest pytest-asyncio
 pytest tests/unit_tests -q                # fake Recall subprocess, scripted model

@@ -130,11 +130,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      # `polign-recall` is not on PyPI yet, so the dependency cannot resolve on
-      # its own. Install it from the tagged source in Polign/recall until the
-      # package is published; then drop this step.
-      - name: Install polign-recall from source
-        run: python -m pip install "polign-recall @ git+https://github.com/Polign/recall@python-v0.2.0#subdirectory=python"
       - name: Install
         working-directory: python/recall-livekit
         run: python -m pip install -e . pytest pytest-asyncio
