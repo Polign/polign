@@ -1,10 +1,10 @@
-# polign-db
+# polign_db
 
 The [polign_db](https://polign.com/polign-db.html) server and command-line
 client, packaged so that pip can install them.
 
 ```bash
-pip install polign-db
+pip install polign_db
 ```
 
 This puts two programs into your environment, next to `python`:
@@ -47,7 +47,7 @@ polign_db.find_bin("polign-server")
 
 | Package | What it installs |
 |---|---|
-| `polign-db` | The server and CLI binaries (this package) |
+| `polign_db` | The server and CLI binaries (this package) |
 | [`polign`](https://pypi.org/project/polign/) | The Python client for a running server |
 | [`polign-recall`](https://pypi.org/project/polign-recall/) | Typed agent memory; depends on this package |
 | [`recall-livekit`](https://pypi.org/project/recall-livekit/) | Recall memory for LiveKit voice agents |

@@ -15,7 +15,7 @@ pip install recall-livekit "livekit-agents[openai,deepgram,cartesia,silero]"
 ```
 
 That is the whole install. pip also brings the
-[`polign-db`](https://pypi.org/project/polign-db/) package with the `polign`
+[`polign_db`](https://pypi.org/project/polign-db/) package with the `polign`
 CLI and `polign-server` binaries for Linux, macOS and Windows, so there is no
 separate database to download, and a worker image needs nothing beyond
 `pip install`.

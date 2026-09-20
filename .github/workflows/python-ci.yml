@@ -29,7 +29,7 @@ jobs:
         working-directory: python
         run: pytest tests/test_unit.py tests/test_grpc_unit.py tests/test_filter_expr.py -q
 
-  polign-db:
+  polign_db:
     # The wheel builder for the binary package, against synthetic archives.
     runs-on: ubuntu-latest
     steps:
@@ -38,7 +38,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Wheel builder tests
-        working-directory: python/polign-db
+        working-directory: python/polign_db
         run: |
           python -m pip install pytest
           pytest tests -q
@@ -59,7 +59,7 @@ jobs:
       - name: Download the latest polign-server release
         run: |
           set -euo pipefail
-          tag="$(curl -fsSL https://api.github.com/repos/Polign/polign/releases/latest | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"])')"
+          tag="$(curl -fsSL -H "Authorization: Bearer ${{ github.token }}" https://api.github.com/repos/Polign/polign/releases/latest | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"])')"
           echo "resolved ${tag}"
           mkdir -p "$RUNNER_TEMP/polign"
           curl -fsSL "https://github.com/Polign/polign/releases/download/${tag}/polign_db_linux_amd64.tar.gz" | tar -xz -C "$RUNNER_TEMP/polign"
@@ -92,7 +92,7 @@ jobs:
       - name: Download the latest polign-server release
         run: |
           set -euo pipefail
-          tag="$(curl -fsSL https://api.github.com/repos/Polign/polign/releases/latest | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"])')"
+          tag="$(curl -fsSL -H "Authorization: Bearer ${{ github.token }}" https://api.github.com/repos/Polign/polign/releases/latest | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"])')"
           echo "resolved ${tag}"
           mkdir -p "$RUNNER_TEMP/polign"
           curl -fsSL "https://github.com/Polign/polign/releases/download/${tag}/polign_db_linux_amd64.tar.gz" | tar -xz -C "$RUNNER_TEMP/polign"
@@ -121,7 +121,7 @@ jobs:
       - name: Download the latest polign-server release
         run: |
           set -euo pipefail
-          tag="$(curl -fsSL https://api.github.com/repos/Polign/polign/releases/latest | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"])')"
+          tag="$(curl -fsSL -H "Authorization: Bearer ${{ github.token }}" https://api.github.com/repos/Polign/polign/releases/latest | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"])')"
           echo "resolved ${tag}"
           mkdir -p "$RUNNER_TEMP/polign"
           curl -fsSL "https://github.com/Polign/polign/releases/download/${tag}/polign_db_linux_amd64.tar.gz" | tar -xz -C "$RUNNER_TEMP/polign"
@@ -153,7 +153,7 @@ jobs:
       - name: Download the latest polign release
         run: |
           set -euo pipefail
-          tag="$(curl -fsSL https://api.github.com/repos/Polign/polign/releases/latest | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"])')"
+          tag="$(curl -fsSL -H "Authorization: Bearer ${{ github.token }}" https://api.github.com/repos/Polign/polign/releases/latest | python3 -c 'import sys,json; print(json.load(sys.stdin)["tag_name"])')"
           echo "resolved ${tag}"
           mkdir -p "$RUNNER_TEMP/polign"
           curl -fsSL "https://github.com/Polign/polign/releases/download/${tag}/polign_db_linux_amd64.tar.gz" | tar -xz -C "$RUNNER_TEMP/polign"

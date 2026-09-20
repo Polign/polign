@@ -44,7 +44,7 @@ PLATFORMS = {
 
 METADATA = """\
 Metadata-Version: 2.4
-Name: polign-db
+Name: polign_db
 Version: {version}
 Summary: The polign_db server and CLI binaries, installable with pip
 Author: Polign
@@ -133,7 +133,7 @@ def build_wheel(archive_name: str, data: bytes, version: str, out: Path) -> Path
     entries += [(f"{scripts}/{b}{ext}", files[b + ext], True) for b in BINARIES]
     entries += [
         (f"{dist_info}/METADATA", METADATA.format(version=version, readme=(HERE / "README.md").read_text()).encode(), False),
-        (f"{dist_info}/WHEEL", ("Wheel-Version: 1.0\nGenerator: polign-db build_wheels\nRoot-Is-Purelib: false\n"
+        (f"{dist_info}/WHEEL", ("Wheel-Version: 1.0\nGenerator: polign_db build_wheels\nRoot-Is-Purelib: false\n"
                                 + "".join(f"Tag: py3-none-{t}\n" for t in tags)).encode(), False),
         (f"{dist_info}/licenses/LICENSE", files["LICENSE"], False),
     ]
