@@ -86,6 +86,7 @@ In the LiveKit worker's `.env`, set:
 POLIGN_URL=http://127.0.0.1:23000
 POLIGN_API_KEY=<contents of memory-api-key>
 POLIGN_COLLECTION=callers
+POLIGN_READ_TIMEOUT=5
 ```
 
 Use the reachable server address in place of localhost for a remote worker.
@@ -143,6 +144,15 @@ polign-server \
 Keep the worker's `POLIGN_URL`, `POLIGN_API_KEY`, and `POLIGN_COLLECTION`
 configuration as above, and run the same `python verify_memory.py` check.
 After restarting the server, run the printed `--read-only` command.
+
+Set `POLIGN_READ_TIMEOUT=5` in the example worker's environment for cloud
+storage. In a real GCS test from a local worker to `us-west1`, the first read
+after a server restart took about 1.5 seconds: the library's default 0.5-second
+timeout returned no memory, while a 5-second timeout loaded the saved fact.
+This is a measured example, not a latency guarantee. Tune for your deployment;
+the setting applies to all memory reads, including per-turn overflow searches.
+Applications using `RecallMemory` directly should pass
+`memory.for_subject(identity, read_timeout=5.0)`.
 
 | Setting | S3 | GCS |
 |---|---|---|

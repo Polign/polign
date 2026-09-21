@@ -63,7 +63,10 @@ async def entrypoint(ctx: JobContext) -> None:
     # The participant identity comes from the token your server issued, so it
     # is a stable, auth-derived id. Never key memory on the room name.
     memory: RecallMemory = ctx.proc.userdata["recall"]
-    caller = memory.for_subject(participant.identity)
+    caller = memory.for_subject(
+        participant.identity,
+        read_timeout=float(os.environ.get("POLIGN_READ_TIMEOUT", "0.5")),
+    )
     logger.info("session for %s", participant.identity)
 
     session = AgentSession(
