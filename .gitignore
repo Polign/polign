@@ -9,4 +9,5 @@ python/build/
 
 # The LiveKit example: provider keys, and the local Recall database with its key
 examples/livekit/.env
+examples/livekit/memory-api-key
 recall-data/

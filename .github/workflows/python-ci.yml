@@ -146,7 +146,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install
         working-directory: python/recall-livekit
-        run: python -m pip install -e . pytest pytest-asyncio
+        run: python -m pip install -e . pytest pytest-asyncio "moto[server]>=5.1,<6"
       - name: Unit tests
         working-directory: python/recall-livekit
         run: pytest tests/unit_tests -q

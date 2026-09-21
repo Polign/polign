@@ -100,6 +100,12 @@ RecallMemory.open(
 )
 ```
 
+For S3, run the server with `-store s3://your-bucket/recall-livekit` and give
+that server an AWS identity with access to the bucket. The worker connects
+to its HTTP(S) URL; do not pass an S3 URI as `url` or `local_dir`. The
+[LiveKit example](../../examples/livekit/README.md#use-an-s3-backed-store)
+includes API-key setup and a check for memory recovery after a server restart.
+
 ## Your own Agent subclass
 
 ```python
@@ -162,6 +168,12 @@ python -m pip install -e . pytest pytest-asyncio
 pytest tests/unit_tests -q                # fake Recall subprocess, scripted model
 pytest tests/integration_tests -v         # real polign-server and polign CLI
 ```
+
+To include S3 persistence and authentication coverage, install
+`pip install 'moto[server]>=5.1,<6'` before running the integration tests.
+The S3 test uses an isolated local emulator, writes through the real binaries,
+and checks memory after restarting the server with its disk cache disabled.
+It does not verify AWS IAM or connectivity to a real bucket. CI runs it too.
 
 The integration tests locate the binaries like the SDK's tests do
 (`POLIGN_SERVER`, `POLIGN_SOURCE`, `POLIGN_SERVER_VERSION`, or the latest

@@ -18,6 +18,7 @@ import subprocess
 import tarfile
 import time
 import urllib.request
+from contextlib import contextmanager
 
 import pytest
 
@@ -40,7 +41,8 @@ def _build_from_source(source: str, out_dir: pathlib.Path) -> tuple[pathlib.Path
     server, cli = out_dir / "polign-server", out_dir / "polign"
     for binary, pkg in ((server, "./cmd/server"), (cli, "./cmd/polign")):
         subprocess.run(
-            ["go", "build", "-o", str(binary), pkg], cwd=root, check=True, capture_output=True, text=True
+            ["go", "build", "-tags", "cloud", "-o", str(binary), pkg],
+            cwd=root, check=True, capture_output=True, text=True
         )
     return server, cli
 
@@ -107,17 +109,17 @@ def _locate(tmp_dir: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
     pytest.skip("no polign binaries: set POLIGN_SERVER, POLIGN_SOURCE, or allow a release download")
 
 
-@pytest.fixture(scope="session")
-def polign(tmp_path_factory: pytest.TempPathFactory):
-    """``(url, cli_path)`` of a freshly started polign-server, torn down after the session."""
-    server, cli = _locate(tmp_path_factory.mktemp("bin"))
+@contextmanager
+def running_server(server, store, *, env=None, flags=()):
+    """Start an isolated server, optionally against an S3 emulator."""
     http_port, grpc_port = _free_port(), _free_port()
-    data = tmp_path_factory.mktemp("data")
     proc = subprocess.Popen(
         [
-            str(server), "-store", f"fs:{data}", "-telemetry=false",
+            str(server), "-store", store, "-telemetry=false",
             "-http", f"127.0.0.1:{http_port}", "-grpc", f"127.0.0.1:{grpc_port}",
+            *flags,
         ],
+        env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
     )
@@ -136,7 +138,16 @@ def polign(tmp_path_factory: pytest.TempPathFactory):
             if time.time() > deadline:
                 raise RuntimeError("server did not become healthy within 15s")
             time.sleep(0.1)
-        yield url, cli
+        yield url
     finally:
         proc.terminate()
         proc.wait(timeout=10)
+
+
+@pytest.fixture(scope="session")
+def polign(tmp_path_factory: pytest.TempPathFactory):
+    """``(url, cli_path)`` of a freshly started polign-server, torn down after the session."""
+    server, cli = _locate(tmp_path_factory.mktemp("bin"))
+    data = tmp_path_factory.mktemp("data")
+    with running_server(server, f"fs:{data}") as url:
+        yield url, cli
