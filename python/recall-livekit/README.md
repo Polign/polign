@@ -106,6 +106,10 @@ to its HTTP(S) URL; do not pass an S3 URI as `url` or `local_dir`. The
 [LiveKit example](../../examples/livekit/README.md#use-an-s3-backed-store)
 includes API-key setup and a check for memory recovery after a server restart.
 
+GCS uses the same worker connection: start the server with
+`-store gcs://your-bucket/recall-livekit` and Google Application Default
+Credentials. See the [GCS setup](../../examples/livekit/README.md#use-a-gcs-backed-store).
+
 ## Your own Agent subclass
 
 ```python
@@ -171,9 +175,11 @@ pytest tests/integration_tests -v         # real polign-server and polign CLI
 
 To include S3 persistence and authentication coverage, install
 `pip install 'moto[server]>=5.1,<6'` before running the integration tests.
-The S3 test uses an isolated local emulator, writes through the real binaries,
-and checks memory after restarting the server with its disk cache disabled.
-It does not verify AWS IAM or connectivity to a real bucket. CI runs it too.
+For GCS, install `go install github.com/fsouza/fake-gcs-server@v1.55.0` and put
+the binary on PATH, or set `FAKE_GCS_SERVER` to its path. The same test runs
+against both emulators, writes through the real binaries, and checks corrections
+and withdrawals after server restarts with the disk cache disabled. It does not
+verify cloud IAM, real-bucket connectivity, or GCS gRPC/zonal modes. CI runs both.
 
 The integration tests locate the binaries like the SDK's tests do
 (`POLIGN_SERVER`, `POLIGN_SOURCE`, `POLIGN_SERVER_VERSION`, or the latest

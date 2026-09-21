@@ -15,6 +15,7 @@ import platform
 import shutil
 import socket
 import subprocess
+import tempfile
 import tarfile
 import time
 import urllib.request
@@ -111,7 +112,7 @@ def _locate(tmp_dir: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
 
 @contextmanager
 def running_server(server, store, *, env=None, flags=()):
-    """Start an isolated server, optionally against an S3 emulator."""
+    """Start an isolated server, optionally against a cloud-storage emulator."""
     http_port, grpc_port = _free_port(), _free_port()
     proc = subprocess.Popen(
         [
@@ -151,3 +152,87 @@ def polign(tmp_path_factory: pytest.TempPathFactory):
     data = tmp_path_factory.mktemp("data")
     with running_server(server, f"fs:{data}") as url:
         yield url, cli
+
+
+@pytest.fixture(params=["s3", "gcs"])
+def cloud_store(request):
+    """A fresh emulator bucket, sanitized server environment, and key listing."""
+    env = {
+        k: v for k, v in os.environ.items()
+        if not k.startswith(("AWS_", "POLIGN_", "GOOGLE_", "GCS_", "STORAGE_EMULATOR_"))
+    }
+    bucket, prefix = "recall-livekit-test", "memory"
+    if request.param == "s3":
+        boto3 = pytest.importorskip("boto3")
+        moto = pytest.importorskip("moto.server")
+        # Check socket permissions before Moto starts a thread that could hang.
+        port = _free_port()
+        emulator = moto.ThreadedMotoServer(ip_address="127.0.0.1", port=port, verbose=False)
+        emulator.start()
+        try:
+            endpoint = f"http://127.0.0.1:{port}"
+            s3 = boto3.client(
+                "s3", endpoint_url=endpoint, region_name="us-east-1",
+                aws_access_key_id="testing", aws_secret_access_key="testing",
+            )
+            s3.create_bucket(Bucket=bucket)
+            env.update(
+                AWS_ACCESS_KEY_ID="testing", AWS_SECRET_ACCESS_KEY="testing",
+                AWS_REGION="us-east-1", AWS_ENDPOINT_URL_S3=endpoint,
+                AWS_S3_FORCE_PATH_STYLE="true", AWS_EC2_METADATA_DISABLED="true",
+                AWS_CONFIG_FILE=os.devnull, AWS_SHARED_CREDENTIALS_FILE=os.devnull,
+            )
+
+            def list_keys():
+                return [
+                    obj["Key"]
+                    for page in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix + "/")
+                    for obj in page.get("Contents", [])
+                ]
+
+            yield f"s3://{bucket}/{prefix}", env, list_keys
+        finally:
+            emulator.stop()
+        return
+
+    binary = os.environ.get("FAKE_GCS_SERVER") or shutil.which("fake-gcs-server")
+    if not binary:
+        pytest.skip("install fake-gcs-server or set FAKE_GCS_SERVER to enable GCS coverage")
+    endpoint = f"http://127.0.0.1:{_free_port()}"
+    with tempfile.TemporaryFile() as log:
+        proc = subprocess.Popen(
+            [binary, "-scheme", "http", "-host", "127.0.0.1", "-port", endpoint.rsplit(":", 1)[1],
+             "-backend", "memory", "-external-url", endpoint, "-log-level", "error"],
+            env=env, stdout=log, stderr=log,
+        )
+        try:
+            deadline = time.monotonic() + 15
+            while True:
+                try:
+                    with urllib.request.urlopen(endpoint + "/storage/v1/b", timeout=1):
+                        break
+                except OSError:
+                    if proc.poll() is not None or time.monotonic() > deadline:
+                        log.seek(0)
+                        raise RuntimeError("GCS emulator failed to start: " + log.read().decode(errors="replace"))
+                    time.sleep(0.1)
+            req = urllib.request.Request(
+                endpoint + "/storage/v1/b?project=testing", data=json.dumps({"name": bucket}).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=5):
+                pass
+            env["STORAGE_EMULATOR_HOST"] = endpoint
+
+            def list_keys():
+                with urllib.request.urlopen(endpoint + f"/storage/v1/b/{bucket}/o?prefix={prefix}/", timeout=5) as resp:
+                    return [obj["name"] for obj in json.load(resp).get("items", [])]
+
+            yield f"gcs://{bucket}/{prefix}", env, list_keys
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=5)

@@ -104,6 +104,59 @@ command to verify recovery. The synthetic facts remain in the test collection.
 This check needs only `recall-livekit` and `python-dotenv`, with no LiveKit or
 model-provider credentials. Finally run `python agent.py dev` for a voice call.
 
+## Use a GCS-backed store
+
+The worker setup and memory API are identical to S3. Change the server's
+store URI to `gcs://your-bucket/recall-livekit` and configure Google
+Application Default Credentials (ADC) on the server machine. Polign uses
+`gcs://`; the `gcloud storage` command uses `gs://` for the same bucket.
+
+For a local server, authenticate ADC separately from the gcloud CLI:
+
+```bash
+gcloud config set project polign-admin
+gcloud auth application-default login
+```
+
+Selecting a project does not refresh expired credentials. On Google Cloud,
+use an attached service account or Workload Identity with access to the bucket.
+An existing service-account or federation configuration can instead be supplied
+through `GOOGLE_APPLICATION_CREDENTIALS`. See Google's
+[ADC setup guide](https://docs.cloud.google.com/docs/authentication/set-up-adc-local-dev-environment).
+
+The server identity needs `storage.objects.get`, `storage.objects.create`,
+`storage.objects.delete`, and `storage.objects.list`. The bucket-level
+[`roles/storage.objectUser`](https://docs.cloud.google.com/storage/docs/access-control/iam-roles)
+role includes those permissions. Use a dedicated bucket/prefix with any
+additional access required by its encryption policy.
+
+Using the API-key file created in the S3 instructions, start:
+
+```bash
+polign-server \
+  -store gcs://your-bucket/recall-livekit \
+  -require-data-key -bootstrap-key-file ./memory-api-key \
+  -http 127.0.0.1:23000 -grpc 127.0.0.1:23001 \
+  -telemetry=false
+```
+
+Keep the worker's `POLIGN_URL`, `POLIGN_API_KEY`, and `POLIGN_COLLECTION`
+configuration as above, and run the same `python verify_memory.py` check.
+After restarting the server, run the printed `--read-only` command.
+
+| Setting | S3 | GCS |
+|---|---|---|
+| Server store URI | `s3://bucket/prefix` | `gcs://bucket/prefix` |
+| Server authentication | AWS credential chain / IAM role | Google ADC / service account |
+| Worker connection | `POLIGN_URL` and Polign API key | Same |
+| Local emulator | `AWS_ENDPOINT_URL_S3`, `AWS_S3_FORCE_PATH_STYLE=true` | `STORAGE_EMULATOR_HOST` |
+| Default persistence and cache settings | Remote-store preset | Same |
+
+The parity tests cover ordinary buckets through the HTTP APIs. Leave emulator
+variables unset for real buckets. GCS gRPC (`GCS_GRPC=true`) and Rapid Storage
+(`GCS_ZONAL=true`) require separate real-cloud verification; emulator success
+does not validate those modes, cloud IAM, or comparative performance.
+
 ## Your own predicates
 
 Copy the starter registry and edit it, then point `POLIGN_PREDICATES` at it:
