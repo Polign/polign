@@ -93,6 +93,7 @@ Choose the integration that fits your application:
 | --- | --- |
 | [Go library](https://github.com/Polign/recall) | Embed Recall in an agent or service. |
 | [Python client](https://github.com/Polign/recall/tree/main/python) | Read and write memories from Python through Recall's MCP server. |
+| [Vapi adapter](python/recall-vapi) | Remember callers across voice calls through authenticated webhooks and memory tools. |
 | MCP server | Give an MCP-compatible agent access to the memory tools. |
 
 With Polign v0.6.4+, an MCP host can launch:
