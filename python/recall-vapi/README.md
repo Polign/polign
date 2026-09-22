@@ -6,15 +6,15 @@ Function tool, and remembers them on the next call. Uses the existing
 `polign-recall` client and the same starter predicates as `recall-livekit`;
 LiveKit is not a dependency. No separate extraction model runs.
 
-This package is under development in this repository, not yet published.
+Install the adapter with its optional FastAPI webhook router:
 
 ```bash
-pip install -e './python/recall-vapi[fastapi]'
+pip install 'recall-vapi[fastapi]'
 ```
 
 ## Quick start
 
-See [the runnable FastAPI example](../../examples/vapi/README.md) for inbound
+See [the runnable FastAPI example](https://github.com/Polign/polign/tree/main/examples/vapi) for inbound
 phone setup, authentication, a Docker image, and a local two-call check.
 
 ```python
@@ -158,6 +158,6 @@ that final manual test.
 
 The voice predicate JSON is copied from `recall-livekit` to avoid a dependency
 on a voice runtime. A test checks parity when both source packages are present.
-CI includes this package; `vapi/v0.1.0` is its publishing tag. Before publishing,
-register the `recall-vapi` PyPI trusted publisher for this repository's
-`python-publish.yml` workflow and `pypi` environment.
+CI includes this package. Release tags use `vapi/vX.Y.Z` and must match the
+version in `pyproject.toml`. Publishing uses the PyPI trusted publisher for
+this repository's `python-publish.yml` workflow and `pypi` environment.

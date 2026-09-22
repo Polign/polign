@@ -1,3 +1,3 @@
-# From this directory, install the unpublished adapter from the checkout.
+# From this directory, install the adapter from the checkout for development.
 -e ../../python/recall-vapi[fastapi]
 uvicorn>=0.30,<1
