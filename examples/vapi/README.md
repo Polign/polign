@@ -158,12 +158,11 @@ low-sensitivity preferences. For account-specific memory, replace
 `resolve_subject` with your authenticated customer lookup. Webhook credentials
 authenticate Vapi, not the person on the phone.
 
-For one host, retain the whole `data/` directory across restarts. It contains
-the memory store plus `vapi.sqlite3`, the durable bindings and retry ledger.
+Retain the `data/` directory across restarts; it holds the memory store.
 To use an existing Polign server instead, set `POLIGN_URL`, `POLIGN_API_KEY`,
-and optionally `POLIGN_COLLECTION`. Keep the SQLite ledger persistent even
-when the memory store is remote. Multiple hosts need shared transactional
-call state; the included SQLite implementation is for one host.
+and optionally `POLIGN_COLLECTION`. Recall is the only store: call bindings
+and the retry ledger are records in a `vapi_calls` collection on the same
+server, so several workers or hosts pointed at it share them.
 
 The local memory server started by Recall keeps running across app restarts.
 Its process ID and log are in `data/memory/runtime.json` and `server.log`.
@@ -192,5 +191,5 @@ withdraws a current fact while retaining history.
 
 Writes may finish after an HTTP timeout. The ledger prevents replaying the
 same tool-call ID and reports unknown outcomes honestly. A service crash can
-leave pending reservations that require manual reconciliation. See the
+leave pending records that require manual reconciliation. See the
 [adapter README](../../python/recall-vapi/README.md#retries-concurrency-and-persistence).

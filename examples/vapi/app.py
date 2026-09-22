@@ -11,7 +11,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from live_test_audit import AuditedRecallVapi
-from recall_vapi import RecallMemory, RecallVapi, SQLiteState
+from recall_vapi import RecallMemory, RecallVapi
 from recall_vapi.fastapi import create_router
 
 
@@ -82,7 +82,6 @@ async def lifespan(app: FastAPI):
         adapter = adapter_type(
             **audit_options,
             memory=memory,
-            state=SQLiteState(data / "vapi.sqlite3"),
             assistant={
                 "name": "Recall support assistant",
                 "firstMessageMode": "assistant-speaks-first-with-model-generated-message",

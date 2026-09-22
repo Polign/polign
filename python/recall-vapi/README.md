@@ -18,7 +18,7 @@ See [the runnable FastAPI example](https://github.com/Polign/polign/tree/main/ex
 phone setup, authentication, a Docker image, and a local two-call check.
 
 ```python
-from recall_vapi import RecallMemory, RecallVapi, SQLiteState
+from recall_vapi import RecallMemory, RecallVapi
 from recall_vapi.fastapi import create_router
 
 # Once per worker, during application startup:
@@ -33,7 +33,6 @@ async def resolve_subject(message):
 
 adapter = RecallVapi(
     memory=memory,
-    state=SQLiteState("./data/vapi.sqlite3"),
     assistant=your_base_assistant_configuration,
     tool_server={
         "url": "https://your-service.example/vapi/webhook",
@@ -112,27 +111,36 @@ client. See [Vapi web calls](https://docs.vapi.ai/quickstart/web).
 
 ## Retries, concurrency, and persistence
 
-`SQLiteState` stores call bindings, normalized tool requests, and results.
+Recall is the only store. Call bindings and the tool ledger are records in a
+`vapi_calls` collection on the same Polign server as the memory, so every
+worker and host that shares the memory shares them, and one backup and
+retention policy covers both. `RecallMemory.open` records where that server
+is (the managed local database, or `POLIGN_URL`), and the adapter uses it
+unless you pass `state=`. Rename the collection with
+`state=PolignState.for_memory(memory, collection="...")`.
+
 Concurrent duplicate deliveries reserve only one execution. A delayed retry
 of an old correction returns its old result without changing the newer fact.
 Reusing an ID with different arguments is rejected. Writes that time out can
-still finish; their eventual result is recorded for subsequent retries.
+still finish; their eventual result is recorded for subsequent retries. This
+is at-most-once execution for each `(call_id, tool_call_id)` while the
+records are retained, not atomic exactly-once delivery: Polign has no
+insert-if-absent write, so a reservation is a pending record written before
+the operation runs. A retry always finds it; only two deliveries of the same
+tool call within the same few milliseconds could both execute. A crash after
+a reservation may leave a pending operation, whether or not Recall committed
+it. Such operations are never automatically replayed; reconcile the record's
+fingerprint against Recall history. Successful remember results include the
+event ID; the Recall source is `user_stated`. A new tool-call ID is a new
+operation.
 
-This provides at-most-once execution for each `(call_id, tool_call_id)` while
-the ledger is retained, not atomic exactly-once delivery across SQLite and
-Recall. A crash after reservation may leave a pending operation, whether or
-not Recall committed it. Such operations are never automatically replayed;
-reconcile the ledger's normalized request against Recall history. Successful
-remember results include the event ID; the Recall source is `user_stated`.
-A new tool-call ID is a new operation.
-
-Keep the SQLite file on persistent local disk. Multiple workers on one host
-may share it; separate machines need an equivalent shared transactional state
-implementation with `bind`, `subject`, `reserve`, `finish_tool`, and
-`finish_call` methods. Do not use independent ledgers or put SQLite on NFS.
-State is retained until you remove it; include its customer IDs and results
-in your retention policy. Removing it also removes deduplication protection
-and bindings for old calls. Back it up alongside the memory store.
+The records hold customer IDs and tool results and are kept until you delete
+them; include them in your retention policy. Deleting them also removes
+deduplication protection for old calls. If the state server is unreachable,
+the webhook answers 503 and Vapi retries. `MemoryState` keeps the same
+ledger in the adapter process for tests and one-off runs; any object with
+`bind`, `subject`, `reserve`, `finish_tool`, and `finish_call` methods can
+replace it.
 
 The Recall client serializes requests. Bounded worker slots and timeouts keep
 slow operations from accumulating without limit. Defaults are one second for
@@ -151,7 +159,8 @@ python -m build
 ```
 
 Tests cover Vapi payload variants, identity isolation, corrections across
-calls, duplicate delivery and restart, unknown outcomes, and HTTP credentials.
+calls, duplicate delivery across a worker restart, unknown outcomes, and
+HTTP credentials.
 Integration tests run the real Recall subprocess and an isolated Polign server.
 They do not exercise Vapi's live voice pipeline. The example README describes
 that final manual test.

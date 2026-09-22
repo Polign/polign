@@ -2,13 +2,35 @@ import threading
 
 import pytest
 import pytest_asyncio
+from polign import NotFoundError, Vector
 from polign_recall import Belief, RecallError, RememberResult
 
-from recall_vapi import RecallMemory, RecallVapi, SQLiteState
+from recall_vapi import MemoryState, PolignState, RecallMemory, RecallVapi
+
+
+class FakePolignClient:
+    """Enough of polign.Client for PolignState: upsert and point lookup, no CAS."""
+
+    def __init__(self):
+        self.records = {}
+        self.lock = threading.Lock()
+
+    def put(self, collection, id, values, metadata=None):
+        assert collection == "vapi_calls" and list(values) == [1.0]
+        with self.lock:
+            self.records[id] = dict(metadata or {})
+        return id
+
+    def get(self, collection, id, *, typed_metadata=False):
+        assert collection == "vapi_calls" and typed_metadata
+        with self.lock:
+            if id not in self.records:
+                raise NotFoundError("no such vector")
+            return Vector(id, [1.0], dict(self.records[id]))
 
 
 class FakeClient:
-    """Controllable storage boundary; adapter and durable ledger are real."""
+    """Controllable storage boundary; adapter and call state are real."""
 
     def __init__(self):
         self.facts = {}
@@ -65,8 +87,20 @@ def client():
     return FakeClient()
 
 
+@pytest.fixture
+def polign():
+    return FakePolignClient()
+
+
+@pytest.fixture(params=["polign", "memory"])
+def state(request, polign):
+    if request.param == "polign":
+        return PolignState(client=polign)
+    return MemoryState()
+
+
 @pytest_asyncio.fixture
-async def adapter(tmp_path, client):
+async def adapter(client, state):
     async def resolve(message):
         return {"alice-number": "tenant:alice", "bob-number": "tenant:bob"}.get(
             message["call"].get("customer", {}).get("number")
@@ -74,7 +108,7 @@ async def adapter(tmp_path, client):
 
     bridge = RecallVapi(
         memory=RecallMemory(client),
-        state=SQLiteState(tmp_path / "state.sqlite3"),
+        state=state,
         assistant={
             "model": {
                 "provider": "openai",

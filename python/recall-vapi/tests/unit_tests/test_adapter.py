@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from conftest import event, run_tool, start, write
 
-from recall_vapi import VOICE_REGISTRY, SQLiteState, StateError
+from recall_vapi import VOICE_REGISTRY, MemoryState, PolignState, RecallMemory, StateError
 
 
 async def test_two_calls_correction_and_isolation(adapter, client):
@@ -35,11 +35,46 @@ async def test_out_of_order_end_report_prevents_reopening_call(adapter):
         await start(adapter)
 
 
-async def test_delayed_duplicate_does_not_undo_correction_even_after_restart(adapter, client):
+def test_default_state_lives_on_the_memory_server(client, tmp_path, monkeypatch):
+    memory = RecallMemory(client, connection={"url": "http://127.0.0.1:1", "api_key": "k"})
+    assert isinstance(PolignState.for_memory(memory), PolignState)
+    with pytest.raises(ValueError):
+        PolignState.for_memory(RecallMemory(client))
+    # RecallMemory.open derives the connection the same way the Recall client does.
+    from recall_vapi.memory import _connection
+
+    (tmp_path / "runtime.json").write_text(json.dumps({"url": "http://127.0.0.1:2"}))
+    (tmp_path / "local-key").write_text("local-secret\n")
+    assert _connection({}, tmp_path) == {"url": "http://127.0.0.1:2", "api_key": "local-secret"}
+    monkeypatch.delenv("POLIGN_URL", raising=False)
+    monkeypatch.delenv("POLIGN_API_KEY", raising=False)
+    assert _connection({}, None) == {"url": "http://localhost:23000", "api_key": None}
+    shared = {"POLIGN_URL": "https://db.example", "POLIGN_API_KEY": "shared"}
+    assert _connection(shared, None) == {"url": "https://db.example", "api_key": "shared"}
+
+
+async def test_memory_state_is_bounded(adapter, client):
+    adapter.state = MemoryState(max_calls=2)
     await start(adapter)
     original = await run_tool(adapter, write())
     await run_tool(adapter, write("tool-2", "Sam"))
-    adapter.state = SQLiteState(adapter.state.path)
+    assert await run_tool(adapter, write()) == original
+    assert len(client.writes) == 2
+    # Old calls are evicted once newer ones exceed the bound; their ledger goes with them.
+    await start(adapter, "call-2")
+    await start(adapter, "call-3")
+    assert "error" in await run_tool(adapter, write())
+
+
+async def test_delayed_duplicate_does_not_undo_correction_even_after_restart(
+    adapter, client, polign
+):
+    if not isinstance(adapter.state, PolignState):
+        pytest.skip("restart survival is the Polign-backed state's job")
+    await start(adapter)
+    original = await run_tool(adapter, write())
+    await run_tool(adapter, write("tool-2", "Sam"))
+    adapter.state = PolignState(client=polign)  # a new worker over the same server
     assert await run_tool(adapter, write()) == original
     assert client.facts[("tenant:alice", "name")].value == "Sam"
     assert len(client.writes) == 2
@@ -49,6 +84,9 @@ async def test_delayed_duplicate_does_not_undo_correction_even_after_restart(ada
     await adapter.handle(event("end-of-call-report"))
     assert await run_tool(adapter, write()) == original
     assert "error" in await run_tool(adapter, write("new-after-end", "Taylor"))
+    ids = sorted(polign.records)
+    assert ids[0] == "call:call-1" and polign.records["call:call-1"]["closed"] is True
+    assert all(i.startswith(("call:", "tool:")) for i in ids)
 
 
 async def test_concurrent_duplicates_share_one_reservation(adapter, client):

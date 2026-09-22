@@ -2,14 +2,16 @@
 
 from .adapter import RecallVapi, SubjectResolver
 from .memory import VOICE_REGISTRY, RecallMemory
-from .state import SQLiteState, StateError
+from .state import CallState, MemoryState, PolignState, StateError
 
 __all__ = [
     "VOICE_REGISTRY",
+    "CallState",
+    "MemoryState",
+    "PolignState",
     "RecallMemory",
     "RecallVapi",
-    "SQLiteState",
     "StateError",
     "SubjectResolver",
 ]
-__version__ = "0.1.0"
+__version__ = "0.2.0"

@@ -2,7 +2,9 @@ import httpx
 import pytest
 from conftest import event, write
 from fastapi import FastAPI
+from polign import UnavailableError
 
+from recall_vapi import PolignState
 from recall_vapi.fastapi import create_router
 
 
@@ -32,6 +34,29 @@ async def test_http_authentication_and_tool_response(adapter, client):
         assert (
             await http.post("/vapi/webhook", content=b"x" * 1_048_577, headers=headers)
         ).status_code == 413
+
+
+async def test_state_outage_asks_vapi_to_retry(adapter, polign):
+    if not isinstance(adapter.state, PolignState):
+        pytest.skip("only the Polign-backed state can be unavailable")
+    app = FastAPI()
+    app.include_router(create_router(adapter, token="test-secret"))
+    adapter.bind_call("call-1", "tenant:alice")
+
+    def down(*_, **__):
+        raise UnavailableError("server restarting")
+
+    polign.get = down
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as http:
+        response = await http.post(
+            "/vapi/webhook",
+            json=event("tool-calls", toolCallList=[write()]),
+            headers={"Authorization": "Bearer test-secret"},
+        )
+    assert response.status_code == 503
+    assert "restarting" not in response.text
 
 
 def test_auth_cannot_be_disabled(adapter):

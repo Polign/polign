@@ -13,7 +13,7 @@ from typing import Any, TypeVar
 from polign_recall import RecallError
 
 from .memory import RecallMemory
-from .state import SQLiteState
+from .state import CallState, PolignState
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -33,14 +33,16 @@ class RecallVapi:
 
     ``resolve_subject`` receives an authenticated assistant-request message and
     returns an application-owned customer ID, or None for an anonymous call.
-    Later tools use the durable binding, never model arguments or webhook metadata.
+    Later tools use the call binding, never model arguments or webhook metadata.
+    ``state`` defaults to PolignState on the server the memory came from, so
+    bindings and the retry ledger live next to the memory itself. Pass
+    MemoryState for tests, or your own CallState for other storage.
     """
 
     def __init__(
         self,
         *,
         memory: RecallMemory,
-        state: SQLiteState,
         assistant: dict,
         tool_server: dict,
         resolve_subject: SubjectResolver,
@@ -50,6 +52,7 @@ class RecallVapi:
         write_timeout: float = 3.0,
         resolver_timeout: float = 1.0,
         max_concurrency: int = 8,
+        state: CallState | None = None,
     ):
         if limit < 1 or max_concurrency < 1:
             raise ValueError("limit and max_concurrency must be positive")
@@ -67,7 +70,7 @@ class RecallVapi:
             if tool.get("function", {}).get("name") in {"remember", "recall", "forget"}:
                 raise ValueError("assistant already contains a reserved memory tool name")
         self.memory = memory
-        self.state = state
+        self.state = state if state is not None else PolignState.for_memory(memory)
         self.assistant = deepcopy(assistant)
         self.tool_server = deepcopy(tool_server)
         self.resolve_subject = resolve_subject
@@ -111,7 +114,11 @@ class RecallVapi:
         await asyncio.to_thread(self.memory.close)
 
     def bind_call(self, call_id: str, subject: str) -> None:
-        """Bind an outbound/web call using identity established by your backend."""
+        """Bind an outbound/web call using identity established by your backend.
+
+        Blocks for the state write; use ``await asyncio.to_thread(...)`` from
+        async code.
+        """
         self.state.bind(call_id, subject)
 
     async def prepare_assistant(self, subject: str | None) -> dict:
@@ -162,7 +169,7 @@ class RecallVapi:
             raise ValueError("message.call.id is required")
         call_id = call["id"]
         if kind == "end-of-call-report":
-            self.state.finish_call(call_id)
+            await asyncio.to_thread(self.state.finish_call, call_id)
             return {}
         if kind == "assistant-request":
             try:
@@ -173,7 +180,7 @@ class RecallVapi:
                 logger.warning("Customer resolution timed out; continuing anonymously")
                 subject = None
             if subject is not None:
-                self.bind_call(call_id, subject)
+                await asyncio.to_thread(self.bind_call, call_id, subject)
             return {"assistant": await self.prepare_assistant(subject)}
         calls = message.get("toolCallList")
         if calls is None:
@@ -206,10 +213,10 @@ class RecallVapi:
             args = self.memory.validate(name, args, forget_tool=self.forget_tool)
             # Keep the canonical request so a pending write can be reconciled.
             fingerprint = json.dumps([name, args], sort_keys=True, allow_nan=False)
-            previous = self.state.reserve(call_id, tool_id, fingerprint)
+            previous = await asyncio.to_thread(self.state.reserve, call_id, tool_id, fingerprint)
             if previous is not None:
                 return previous
-            subject = self.state.subject(call_id)
+            subject = await asyncio.to_thread(self.state.subject, call_id)
         except (ValueError, TypeError) as exc:
             return {"toolCallId": tool_id, "error": str(exc)}
 

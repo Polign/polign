@@ -5,6 +5,7 @@ import hmac
 import json
 
 from fastapi import APIRouter, HTTPException, Request
+from polign import PolignError
 
 from .adapter import RecallVapi
 from .state import StateError
@@ -38,8 +39,11 @@ def create_router(adapter: RecallVapi, *, token: str, path: str = "/vapi/webhook
             raise HTTPException(409, str(exc)) from exc
         except (ValueError, TypeError) as exc:
             raise HTTPException(400, "Invalid Vapi message") from exc
+        except PolignError as exc:
+            # Call state could not be read or written; a retry finds any pending record.
+            raise HTTPException(503, "Call state unavailable; retry") from exc
         except asyncio.TimeoutError as exc:
-            # Shielded writes continue and their ledger prevents duplicate execution.
+            # Shielded writes continue and the call state prevents duplicate execution.
             raise HTTPException(504, "Webhook timed out; writes may still complete") from exc
 
     return router

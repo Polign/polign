@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "recall-vapi"
-version = "0.1.0"
+version = "0.2.0"
 description = "Typed, correctable caller memory for Vapi, backed by Recall by Polign"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [{ name = "Polign" }]
-dependencies = ["polign-recall>=0.3.0"]
+dependencies = ["polign-recall>=0.3.0", "polign>=0.7.0"]
 
 [project.optional-dependencies]
 fastapi = ["fastapi>=0.115,<1"]

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from polign_db import find_bin
 
-from recall_vapi import RecallMemory, RecallVapi, SQLiteState
+from recall_vapi import RecallMemory, RecallVapi
 
 
 def free_port():
@@ -83,7 +83,6 @@ def bridge(tmp_path, url, cli):
 
     return RecallVapi(
         memory=memory,
-        state=SQLiteState(tmp_path / "vapi.sqlite3"),
         assistant={"model": {"provider": "openai", "model": "test"}},
         tool_server={"url": "https://example.test/vapi/webhook"},
         resolve_subject=resolve,
@@ -128,6 +127,11 @@ async def test_corrections_withdrawal_and_retry_survive_server_and_adapter_resta
             assert json.loads(changed["result"])["superseded"] == ["Alex"]
             await tool(adapter, "consent", "false", predicate="consents_to_recording")
             assert len(adapter.memory.client.history("test:alice", "name")) == 2
+            # The ledger is ordinary records on the same server as the memory.
+            ledger = adapter.state.client.get(
+                "vapi_calls", "tool:first:name-1", typed_metadata=True
+            )
+            assert json.loads(ledger.metadata["response"]) == original
         finally:
             await adapter.aclose()
 

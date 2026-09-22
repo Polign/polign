@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from copy import deepcopy
 from importlib import resources
 from typing import Any
@@ -13,11 +14,28 @@ from polign_recall import Client, RememberResult
 VOICE_REGISTRY = str(resources.files(__package__).joinpath("registry_voice.json"))
 
 
+def _connection(env: dict, local_dir: Any) -> dict[str, str | None]:
+    """Where the Recall client's server is, in the terms polign.Client takes."""
+    if local_dir is not None:
+        # Recall's managed local server leaves these behind when it starts.
+        directory = os.fspath(local_dir)
+        with open(os.path.join(directory, "runtime.json")) as f:
+            url = json.load(f)["url"]
+        with open(os.path.join(directory, "local-key")) as f:
+            return {"url": url, "api_key": f.read().strip() or None}
+    url = env.get("POLIGN_URL") or os.environ.get("POLIGN_URL") or "http://localhost:23000"
+    key = env.get("POLIGN_API_KEY", os.environ.get("POLIGN_API_KEY")) or None
+    return {"url": url, "api_key": key}
+
+
 class RecallMemory:
     """Wrap a long-lived polign_recall.Client. Call close() during service shutdown."""
 
-    def __init__(self, client: Client):
+    def __init__(self, client: Client, *, connection: dict[str, str | None] | None = None):
         self.client = client
+        # {"url": ..., "api_key": ...} for the server behind this client, when known.
+        # PolignState.for_memory keeps call state on the same server.
+        self.connection = connection
         self.registry = {entry["predicate"]: entry for entry in client.predicates()}
         if not self.registry:
             raise ValueError("Recall must have at least one registered predicate")
@@ -29,7 +47,7 @@ class RecallMemory:
         env["POLIGN_PREDICATES"] = predicates
         client = Client(env=env, **client_options)
         try:
-            return cls(client)
+            return cls(client, connection=_connection(env, client_options.get("local_dir")))
         except BaseException:
             client.close()
             raise
