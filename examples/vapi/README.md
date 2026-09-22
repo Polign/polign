@@ -6,13 +6,19 @@ during the conversation, and loads them on the next call. Uses the
 
 ## Guided live phone test
 
-Install the requirements below, then prepare a test environment:
+Use Python 3.10 or newer, a Vapi phone number, Vapi credits/provider access,
+and an installed `cloudflared` for the temporary HTTPS tunnel. Start from this
+directory:
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 python live_test.py init --phone-number-id YOUR_VAPI_PHONE_NUMBER_ID
 python live_test.py serve --tunnel
 ```
 
+Use the phone number's resource ID from Vapi, not its dialable number.
 `init` creates `.env` with two independent secrets and preserves existing
 settings. Use a Vapi number dedicated to this test. `serve --tunnel` uses an
 installed `cloudflared` to create a temporary public HTTPS URL, writes that
@@ -23,7 +29,7 @@ An existing HTTPS reverse proxy can be used with `serve` without `--tunnel`;
 set `PUBLIC_BASE_URL` in `.env` first.
 
 The helper isolates Cloudflare's configuration from existing named tunnels.
-If this Mac's DNS cannot resolve a generated `trycloudflare.com` hostname,
+If the local DNS resolver cannot resolve a generated `trycloudflare.com` hostname,
 the HTTPS check resolves that hostname through Google's public DNS-over-HTTPS
 endpoint while retaining normal TLS hostname and certificate verification.
 This fallback applies only to temporary Quick Tunnel hosts and changes no
@@ -73,7 +79,7 @@ the managed Recall database process continues across app restarts. Restore the
 phone number's prior routing in Vapi before closing the tunnel if it was not a
 dedicated test number. [Cloudflare Quick Tunnels documentation](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/).
 
-## Run locally
+## Run locally without the test helper
 
 From this directory:
 
@@ -81,7 +87,7 @@ From this directory:
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
+test -f .env || cp .env.example .env
 ```
 
 Edit `.env`: set your Vapi phone number ID, tenant name, public HTTPS endpoint,
