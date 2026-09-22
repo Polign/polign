@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from live_test_audit import AuditedRecallVapi
 from recall_vapi import RecallMemory, RecallVapi, SQLiteState
 from recall_vapi.fastapi import create_router
 
@@ -70,7 +71,16 @@ async def lifespan(app: FastAPI):
             "headers": {"Authorization": "Bearer " + token},
             "timeoutSeconds": 7,
         }
-        adapter = RecallVapi(
+        adapter_type = (
+            AuditedRecallVapi if os.environ.get("VAPI_LIVE_TEST") == "1" else RecallVapi
+        )
+        audit_options = (
+            {"audit_path": data / "live-test/events.jsonl"}
+            if adapter_type is AuditedRecallVapi
+            else {}
+        )
+        adapter = adapter_type(
+            **audit_options,
             memory=memory,
             state=SQLiteState(data / "vapi.sqlite3"),
             assistant={

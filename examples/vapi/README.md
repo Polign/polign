@@ -4,6 +4,75 @@ A runnable inbound phone assistant that remembers callers, corrects facts
 during the conversation, and loads them on the next call. Uses the
 [recall-vapi adapter](../../python/recall-vapi/README.md).
 
+## Guided live phone test
+
+Install the requirements below, then prepare a test environment:
+
+```bash
+python live_test.py init --phone-number-id YOUR_VAPI_PHONE_NUMBER_ID
+python live_test.py serve --tunnel
+```
+
+`init` creates `.env` with two independent secrets and preserves existing
+settings. Use a Vapi number dedicated to this test. `serve --tunnel` uses an
+installed `cloudflared` to create a temporary public HTTPS URL, writes that
+URL to `.env`, starts the app, and keeps both processes running. The URL changes
+on each tunnel launch; update Vapi when it does. If you exported an older
+`PUBLIC_BASE_URL` in your shell, unset it before running the other commands.
+An existing HTTPS reverse proxy can be used with `serve` without `--tunnel`;
+set `PUBLIC_BASE_URL` in `.env` first.
+
+The helper isolates Cloudflare's configuration from existing named tunnels.
+If this Mac's DNS cannot resolve a generated `trycloudflare.com` hostname,
+the HTTPS check resolves that hostname through Google's public DNS-over-HTTPS
+endpoint while retaining normal TLS hostname and certificate verification.
+This fallback applies only to temporary Quick Tunnel hosts and changes no
+system DNS settings. Other connection failures are reported normally.
+
+In a second terminal, in this directory with the same virtual environment:
+
+```bash
+python live_test.py check
+python live_test.py configure
+```
+
+`check` verifies public HTTPS, rejected unauthenticated requests, and synthetic
+memory calls. `configure` writes the private phone-server settings to
+`data/live-test/phone-server.json` and prints the Vapi dashboard steps. It does
+not modify your Vapi account. The detailed dashboard instructions are below.
+You do not need to give this service your Vapi private API key.
+
+After configuring the number, make two calls from the same phone:
+
+1. Say “My name is Alex.” Wait for the reply, then say “Actually, call me Sam.”
+   Wait for the reply and hang up.
+2. Call again, listen for a greeting using Sam, and hang up.
+
+Inspect the observed call IDs and evaluate that pair:
+
+```bash
+python live_test.py report
+python live_test.py report --first-call CALL_1_ID --second-call CALL_2_ID
+```
+
+The report checks that the calls resolved to the same caller, Alex was saved
+before the correction to Sam, the second call's initial context contained Sam,
+both calls ended, and no tool errors were observed. It saves the result in
+`data/live-test/report.json`. This verifies webhooks and memory; confirm the
+actual spoken greeting by listening. A pending test never reports success,
+and synthetic `verify-*` calls are excluded.
+
+Live test mode records only call IDs, hashed caller keys, name-memory evidence,
+tool error counts, and ended reasons in a private `events.jsonl` file. It does
+not record audio, transcripts, or complete webhook payloads. The name evidence
+is still personal data; keep this directory private. Ordinary `uvicorn app:app`
+only enables that recorder when `VAPI_LIVE_TEST=1` is set.
+
+Ctrl-C stops the app and tunnel. Memory data and test evidence remain locally;
+the managed Recall database process continues across app restarts. Restore the
+phone number's prior routing in Vapi before closing the tunnel if it was not a
+dedicated test number. [Cloudflare Quick Tunnels documentation](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/).
+
 ## Run locally
 
 From this directory:

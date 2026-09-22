@@ -6,14 +6,17 @@ import urllib.error
 import urllib.request
 import uuid
 
+from live_test_http import open_url
 
-def main():
+
+def main(settings=None):
+    settings = os.environ if settings is None else settings
     url = (
-        os.environ.get("VERIFY_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+        settings.get("VERIFY_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
         + "/vapi/webhook"
     )
-    token = os.environ["VAPI_WEBHOOK_TOKEN"]
-    phone_id = os.environ["VAPI_PHONE_NUMBER_ID"]
+    token = settings["VAPI_WEBHOOK_TOKEN"]
+    phone_id = settings["VAPI_PHONE_NUMBER_ID"]
     first, second = "verify-" + uuid.uuid4().hex, "verify-" + uuid.uuid4().hex
     # NANP fictional number; synthetic facts remain in this demo subject's memory.
     customer = {"number": "+12025550199"}
@@ -39,7 +42,7 @@ def main():
                 "Authorization": "Bearer " + token,
             },
         )
-        with urllib.request.urlopen(req, timeout=8) as response:
+        with open_url(req, timeout=8) as response:
             return json.load(response)
 
     def remember(tool_id, value):
