@@ -350,7 +350,7 @@ class Client:
             for h in resp.get("hits") or []
         ]
 
-    # -- collection admin (bring-your-own-bucket; server needs -byo-store) --
+    # -- collection listing and admin (-byo-store required for lifecycle) --
 
     def create_collection(self, name: str, backend: CollectionBackend) -> CollectionInfo:
         """Register a collection on a customer-owned backend.
@@ -373,7 +373,16 @@ class Client:
         return _collection_from_json(resp)
 
     def list_collections(self) -> List[CollectionInfo]:
-        """List the server's registered collections."""
+        """List collections (requires an operator key when auth is enabled).
+
+        With ``-byo-store``, returns registered collections. Otherwise returns
+        collections discovered in the store's generation/manifest metadata,
+        sorted by name; a collection with only unpersisted writes appears
+        after its first persist. An in-memory server lists local collections.
+        Default-store entries have status ``active`` and empty registry fields
+        (backend, timestamps, and verification details).
+        Servers through 0.7.0 still require ``-byo-store`` for this method.
+        """
         resp = self._request("GET", "/v1/collections", retry_safe=True)
         return [_collection_from_json(c) for c in resp.get("collections", [])]
 

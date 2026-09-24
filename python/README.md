@@ -140,7 +140,15 @@ filter={
 ## Collection management
 
 Collections are auto-created on first put, so most applications never touch
-these. On a server started with `-byo-store`, the collection API additionally
+the lifecycle methods. `client.list_collections()` also works without
+`-byo-store`: it lists collection names from persisted generation and manifest
+metadata, sorted by name. Collections with only unpersisted writes appear after
+their first persist; an in-memory server lists its local collections. These
+entries have status `active` and empty backend, timestamp, and verification
+fields. When auth is enabled, listing requires an operator key.
+Servers through 0.7.0 still require `-byo-store` for collection listing.
+
+On a server started with `-byo-store`, the collection API additionally
 binds collections to customer-owned buckets — and it takes an API key:
 
 ```python
@@ -160,7 +168,8 @@ client.delete_collection("docs")      # disable permanently; bucket data is unto
 A pending collection activates automatically (within ~30s) once you finish
 your side: write `info.claim_token` to `info.claim_path` in the bucket, or
 attach the trust policy from `client.backend_setup(uri)` to the role. Without
-`-byo-store` these endpoints raise `NotEnabledError`.
+`-byo-store` the create, get, verify, and delete collection methods raise
+`NotEnabledError`; listing remains available.
 
 ## Auth
 

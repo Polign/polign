@@ -300,7 +300,16 @@ class GrpcClient:
         return _collection_from_pb(resp.info)
 
     def list_collections(self) -> List[CollectionInfo]:
-        """List the server's registered collections."""
+        """List collections (requires an operator key when auth is enabled).
+
+        With ``-byo-store``, returns registered collections. Otherwise returns
+        collections discovered in the store's generation/manifest metadata,
+        sorted by name; a collection with only unpersisted writes appears
+        after its first persist. An in-memory server lists local collections.
+        Default-store entries have status ``active`` and empty registry fields
+        (backend, timestamps, and verification details).
+        Servers through 0.7.0 still require ``-byo-store`` for this method.
+        """
         resp = self._admin_call(
             self._stub.ListCollections, pb.ListCollectionsRequest()
         )

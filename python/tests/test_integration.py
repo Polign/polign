@@ -25,6 +25,7 @@ import json
 import os
 import pathlib
 import platform
+import re
 import shutil
 import socket
 import subprocess
@@ -120,11 +121,16 @@ def _locate_server(tmp_dir):
 
 
 @pytest.fixture(scope="module")
-def server(tmp_path_factory):
+def server(tmp_path_factory, request):
     binary = _locate_server(tmp_path_factory.mktemp("bin"))
+    version = subprocess.check_output([str(binary), "-version"], text=True, timeout=10).strip()
     http_port, grpc_port = _free_port(), _free_port()
+    args = [str(binary), "-http", f"127.0.0.1:{http_port}", "-grpc", f"127.0.0.1:{grpc_port}"]
+    if getattr(request, "param", None) == "store":
+        args += ["-store", "fs:" + str(tmp_path_factory.mktemp("store")),
+                 "-hot-max", "0", "-maintain", "0", "-telemetry=false"]
     proc = subprocess.Popen(
-        [str(binary), "-http", f"127.0.0.1:{http_port}", "-grpc", f"127.0.0.1:{grpc_port}"],
+        args,
         cwd=tmp_path_factory.mktemp("data"),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
@@ -140,7 +146,7 @@ def server(tmp_path_factory):
             if time.time() > deadline:
                 raise RuntimeError("server did not become healthy within 15s")
             time.sleep(0.1)
-        yield {"http": http_port, "grpc": grpc_port}
+        yield {"http": http_port, "grpc": grpc_port, "version": version}
     finally:
         probe.close()
         proc.terminate()
@@ -158,6 +164,58 @@ def client(request, server):
         c = Client(f"http://127.0.0.1:{server['http']}", timeout=10)
     yield c
     c.close()
+
+
+def _assert_default_collection_info(info):
+    assert info.status == "active"
+    assert info.backend.uri == ""
+    assert info.backend_id == ""
+    assert info.created_at == ""
+    assert info.verified_at == ""
+    assert info.verified_capabilities == []
+
+
+def _require_default_listing(server):
+    # Public CI also runs against the latest published binary. Skip only
+    # releases known to predate this server feature; dev builds must pass.
+    release = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", server["version"])
+    if release and tuple(map(int, release.groups())) <= (0, 7, 0):
+        pytest.skip("server 0.7.0 and earlier require -byo-store for listing")
+
+
+def test_list_collections_in_memory(client, server, request):
+    _require_default_listing(server)
+    coll = f"listing-memory-{request.node.callspec.id}"
+    client.put(coll, "a", [1.0, 0.0])
+    listed = client.list_collections()
+    names = [c.name for c in listed]
+    assert names == sorted(set(names))
+    _assert_default_collection_info(next(c for c in listed if c.name == coll))
+
+
+@pytest.mark.parametrize("server", ["store"], indirect=True)
+def test_list_collections_default_store(client, server, request):
+    _require_default_listing(server)
+    coll = f"listing-store-{request.node.callspec.id}"
+    assert coll not in [c.name for c in client.list_collections()]
+    # Reach the training threshold instead of waiting for the server's 30s
+    # idle-training delay for a one-vector collection.
+    client.put_many(
+        coll,
+        [polign.Vector(id=f"v{i}", values=[float(i), float(i % 7)]) for i in range(1000)],
+    )
+    # The embedded persistor publishes asynchronously. Listing must discover
+    # its manifest; an acknowledged WAL write alone is not the listing contract.
+    deadline = time.monotonic() + 30
+    while True:
+        listed = client.list_collections()
+        names = [c.name for c in listed]
+        assert names == sorted(set(names))
+        if coll in names:
+            _assert_default_collection_info(next(c for c in listed if c.name == coll))
+            break
+        assert time.monotonic() < deadline, "persisted collection never became discoverable"
+        time.sleep(0.1)
 
 
 def test_round_trip(client, request):
