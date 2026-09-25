@@ -30,9 +30,16 @@ facts, and call remember with both the original `text` and a `statements` array:
 ```
 
 Each evidence string must quote the input exactly. Extract explicit durable
-facts; omit unsupported predicates, uncertain identities, and ambiguous claims.
-Do not turn a negation into a positive assertion. Do not expand the registry by
-inventing near-synonymous predicate names. An empty proposal array is valid.
+facts; omit uncertain identities and ambiguous claims. Do not turn a negation
+into a positive assertion. Do not expand the registry by inventing
+near-synonymous predicate names.
+
+Never drop a durable statement because no predicate fits it. In typed mode,
+remember it with predicate `note` and the statement in the user's words as the
+value. In text mode, propose the predicate you would want: the server keeps the
+whole text as a note and reports that proposal under `unfiled`. An empty
+proposal array is valid and also keeps the text as a note. Recall returns typed
+beliefs ahead of notes.
 The server validates all proposals before writing and labels extracted facts
 agent_inferred. Evidence quotes validate provenance of the proposal, not its
 truth. Typed remember remains available when the fields are already known.
