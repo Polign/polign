@@ -168,27 +168,24 @@ def exercise(store, extra):
 kubectl('create', 'namespace', namespace)
 try:
     # S3 lives outside the Polign pod, so its cache and entire pod can disappear.
+    # Use Moto's official image: the former MinIO image is no longer public.
     secret = uuid.uuid4().hex
-    apply({'apiVersion': 'v1', 'kind': 'Pod', 'metadata': {'name': 'minio', 'labels': {'app': 'minio'}},
-           'spec': {'containers': [{'name': 'minio',
-               'image': 'quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e',
-               'args': ['server', '/data'], 'env': [{'name': 'MINIO_ROOT_USER', 'value': 'polign-test'},
-                   {'name': 'MINIO_ROOT_PASSWORD', 'value': secret}],
-               'ports': [{'containerPort': 9000}],
-               'readinessProbe': {'httpGet': {'path': '/minio/health/ready', 'port': 9000}, 'periodSeconds': 2},
-               'volumeMounts': [{'name': 'data', 'mountPath': '/data'}]}],
-               'volumes': [{'name': 'data', 'emptyDir': {}}]}})
-    apply({'apiVersion': 'v1', 'kind': 'Service', 'metadata': {'name': 'minio'},
-           'spec': {'selector': {'app': 'minio'}, 'ports': [{'port': 9000, 'targetPort': 9000}]}})
-    kubectl('wait', '--for=condition=Ready', 'pod/minio', '--timeout=180s')
-    with forward('pod/minio', 9000) as url:
+    apply({'apiVersion': 'v1', 'kind': 'Pod', 'metadata': {'name': 's3', 'labels': {'app': 's3'}},
+           'spec': {'containers': [{'name': 's3',
+               'image': 'ghcr.io/getmoto/motoserver:5.2.2@sha256:d8ae5edc2bf080e7e4c13f9bd4b29b53ac3b4427e92956318db3dbe23ec43eb7',
+               'ports': [{'containerPort': 5000}],
+               'readinessProbe': {'httpGet': {'path': '/moto-api/', 'port': 5000}, 'periodSeconds': 2}}]}})
+    apply({'apiVersion': 'v1', 'kind': 'Service', 'metadata': {'name': 's3'},
+           'spec': {'selector': {'app': 's3'}, 'ports': [{'port': 5000, 'targetPort': 5000}]}})
+    kubectl('wait', '--for=condition=Ready', 'pod/s3', '--timeout=180s')
+    with forward('pod/s3', 5000) as url:
         s3 = boto3.client('s3', endpoint_url=url, aws_access_key_id='polign-test',
                           aws_secret_access_key=secret, region_name='us-east-1',
                           config=Config(s3={'addressing_style': 'path'}))
         s3.create_bucket(Bucket='polign-test')
     apply({'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': 's3-test'}, 'stringData': {
         'AWS_ACCESS_KEY_ID': 'polign-test', 'AWS_SECRET_ACCESS_KEY': secret,
-        'AWS_REGION': 'us-east-1', 'AWS_ENDPOINT_URL_S3': 'http://minio:9000', 'AWS_S3_FORCE_PATH_STYLE': 'true'}})
+        'AWS_REGION': 'us-east-1', 'AWS_ENDPOINT_URL_S3': 'http://s3:5000', 'AWS_S3_FORCE_PATH_STYLE': 'true'}})
     exercise('s3://polign-test/data', ['--set', 'envFrom[0].secretRef.name=s3-test'])
 
     apply({'apiVersion': 'v1', 'kind': 'PersistentVolumeClaim', 'metadata': {'name': 'polign-data'},
