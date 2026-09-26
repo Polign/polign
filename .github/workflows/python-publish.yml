@@ -6,6 +6,7 @@ name: python-publish
 #   llamaindex/vX.Y.Z -> `llama-index-vector-stores-polign` (python/llama-index-vector-stores-polign/)
 #   livekit/vX.Y.Z    -> `recall-livekit`                    (python/recall-livekit/)
 #   vapi/vX.Y.Z       -> `recall-vapi`                       (python/recall-vapi/)
+#   langgraph/vX.Y.Z  -> `recall-langgraph`                  (python/recall-langgraph/)
 #   polign_db/vX.Y.Z  -> `polign_db`, the server and CLI binaries as platform
 #                        wheels (python/polign_db/). X.Y.Z is the server release
 #                        being repackaged; X.Y.Z.postN repackages it again.
@@ -18,7 +19,7 @@ name: python-publish
 
 on:
   push:
-    tags: ["python/v*", "langchain/v*", "llamaindex/v*", "livekit/v*", "vapi/v*", "polign_db/v*"]
+    tags: ["python/v*", "langchain/v*", "llamaindex/v*", "livekit/v*", "vapi/v*", "langgraph/v*", "polign_db/v*"]
 
 permissions:
   contents: read
@@ -61,6 +62,10 @@ jobs:
                           echo "PKG_VERSION=${GITHUB_REF_NAME#vapi/v}" >> "$GITHUB_ENV"
                           echo "PKG_INIT=" >> "$GITHUB_ENV"
                           echo "PKG_MARKER=recall_vapi/adapter.py" >> "$GITHUB_ENV" ;;
+            langgraph/v*) echo "PKG_DIR=python/recall-langgraph" >> "$GITHUB_ENV"
+                          echo "PKG_VERSION=${GITHUB_REF_NAME#langgraph/v}" >> "$GITHUB_ENV"
+                          echo "PKG_INIT=" >> "$GITHUB_ENV"
+                          echo "PKG_MARKER=recall_langgraph/resume.py" >> "$GITHUB_ENV" ;;
             *)            echo "::error::unexpected tag ${GITHUB_REF_NAME}"; exit 1 ;;
           esac
 
