@@ -108,16 +108,32 @@ def agent_tool(name, args):
         if not 5 <= ttl <= 3600:
             raise ValueError("polign: HTTP 400: invalid argument: ttl must be between 5s and 1h0m0s")
         record = agent_record(agent_id)
-        if record["expires"] > time.monotonic():
-            raise ValueError("recall: agent lease is held by another process")
-        record["expires"] = time.monotonic() + ttl
-        record["epoch"] += 1
         record["resume_args"] = args
+        record["ttl"] = ttl
+        if args.get("defer_lease"):
+            # Read now, write only after agent_acquire.
+            record["pending"] = True
+        else:
+            if record["expires"] > time.monotonic():
+                raise ValueError("recall: agent lease is held by another process")
+            record["expires"] = time.monotonic() + ttl
+            record["epoch"] += 1
         return {"agent_id": agent_id, "fresh": not record["turns"] and not record["state"],
-                "epoch": record["epoch"], "working_state": record["state"] or None,
+                "epoch": 0 if record.get("pending") else record["epoch"],
+                "lease_held": not record.get("pending"), "working_state": record["state"] or None,
                 "recent_turns": record["turns"][-5:], "omitted": {}, "turn_seq": len(record["turns"]),
                 "token_budget": args.get("token_budget") or 8000, "tokens": 10, "briefing": briefing(record)}
     record = agent_record(agent_id)
+    if name == "agent_acquire":
+        if record.get("pending"):
+            if record["expires"] > time.monotonic():
+                raise ValueError("recall: agent lease is held by another process")
+            record["pending"] = False
+            record["expires"] = time.monotonic() + record["ttl"]
+            record["epoch"] += 1
+        return {"acquired": True, "epoch": record["epoch"]}
+    if name in ("update_working_state", "record_turn") and record.get("pending"):
+        raise ValueError("recall: agent lease not acquired yet; call AcquireLease before writing")
     if name == "agent_release":
         released = record["expires"] > time.monotonic()
         record["expires"] = 0.0

@@ -49,7 +49,7 @@ async def test_a_resumed_call_records_its_turns_and_releases_on_close(agent_memo
     assert agent_memory.client._tool("agent_release", {"agent_id": "room-1"}) == {"released": False}
 
 
-async def test_a_new_worker_waits_out_a_dead_workers_lease_and_continues(agent_memory):
+async def test_a_new_worker_continues_at_once_and_writes_after_the_dead_workers_lease(agent_memory):
     sam = agent_memory.for_subject("sam")
     # The first worker resumes the call, talks, and dies without releasing.
     dead = AgentResume(agent_memory, "room-2", lease_ttl=5)
@@ -67,14 +67,23 @@ async def test_a_new_worker_waits_out_a_dead_workers_lease_and_continues(agent_m
                             resume=AgentResume(agent_memory, "room-2", lease_ttl=5, wait=10))
         await session.start(agent)
         await agent.wait_for_memory()
-        waited = time.monotonic() - started
+        # The briefing is there at once, while the dead worker's lease runs on.
+        assert time.monotonic() - started < 2
+        assert not agent.resume.lease_held
         instructions = str(agent.instructions)
         assert agent.resume.resumed and not agent.resume.context.fresh
-        assert waited >= 3  # it had to wait for the dead worker's lease
         assert "cut off" in instructions and "do not greet the caller again" in instructions
         assert "reschedule the delivery" in instructions
         assert "Friday works. Morning or afternoon?" in instructions
         await session.run(user_input="Morning please")
+        # The turns wait in the buffer until the lease is free, then land in order.
+        while not agent.resume.lease_held:
+            assert time.monotonic() - started < 10
+            await asyncio.sleep(0.1)
+        assert time.monotonic() - started >= 3
+        while len(turns(agent_memory, "room-2")) < 4:
+            assert time.monotonic() - started < 12
+            await asyncio.sleep(0.05)
 
     assert [c for _, c, _ in turns(agent_memory, "room-2")][-2:] == ["Morning please", "Morning then."]
 

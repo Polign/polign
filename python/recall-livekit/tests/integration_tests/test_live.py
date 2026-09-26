@@ -119,8 +119,18 @@ async def test_a_call_continues_on_a_new_worker_after_the_old_one_dies(polign):
             await agent.wait_for_memory()
             instructions = str(agent.instructions)
             assert agent.resume.resumed and not agent.resume.context.fresh
-            assert time.monotonic() - started >= 2  # waited out the dead worker's lease
+            # The briefing is ready while the dead worker's lease is still live.
+            assert time.monotonic() - started < 3
+            assert not agent.resume.lease_held
             for text in ("move the delivery", "Can you move my delivery?", "Friday works. Morning or afternoon?"):
                 assert text in instructions
+            await session.run(user_input="Morning please")
+            # The new worker's turns land once the old lease runs out.
+            while not agent.resume.lease_held:
+                assert time.monotonic() - started < 15
+                await asyncio.sleep(0.1)
+            assert time.monotonic() - started >= 2
+        records = second.client.resume(room).recent_turns(10)
+        assert [t.content for t in records][-2:] == ["Morning please", "Morning then."]
     finally:
         second.close()

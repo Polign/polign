@@ -158,12 +158,16 @@ What changes:
 4. `on_exit` (which also runs when the session closes) writes any queued
    turns and releases the call.
 
-Only one worker may hold a call. A worker that died still holds it until
-its lease runs out, so the new agent retries for up to `lease_ttl` plus 5
-seconds before it speaks. Keep `lease_ttl` short for voice; the default is
-15 seconds, and the server accepts 5 seconds to 1 hour. Like the memory
-reads, resuming and recording fail open: if Recall is down, the call goes on
-without a briefing and a warning is logged.
+Only one worker may write for a call, and a worker that died still holds it
+until its lease runs out. The new agent does not wait for that: it reads the
+call's records without the lease, so it has the briefing and speaks at once.
+Its turns wait in a buffer while it takes the lease in the background, then
+are written in order, after anything the dead worker managed to write. The
+default `lease_ttl` of 6 seconds keeps that gap short (the server accepts 5
+seconds to 1 hour). If another worker still holds the call after `wait`
+seconds, this one records nothing and logs a warning. Like the memory reads,
+resuming and recording fail open: if Recall is down, the call goes on without
+a briefing and a warning is logged.
 
 The id must be 1-128 letters, digits, `.`, `_` or `-`; map room names with
 other characters to one. For more options, pass an `AgentResume`:
@@ -195,7 +199,7 @@ does not resume; use `RecallAgent` for that. Needs a `polign` CLI newer than
 | `RecallAgent` | `search_when_overflowed` | on | Per-turn search when the caller has more beliefs than `limit` |
 | `RecallAgent` | `resume` | off | The call's agent id (such as the room name) or an `AgentResume`; continue the call from its records after a worker dies |
 | `RecallAgent` | `resume_template` | `<recall_resume>\n{context}\n</recall_resume>` | Wrapper around the resume block; must contain `{context}` |
-| `AgentResume` | `lease_ttl`, `wait` | 15 s, `lease_ttl` + 5 s | How long a dead worker keeps the call, and how long a new one waits for it |
+| `AgentResume` | `lease_ttl`, `wait` | 6 s, `lease_ttl` + 5 s | How long a dead worker keeps the call, and how long a new one keeps trying to take it before it stops recording |
 | `AgentResume` | `token_budget`, `timeout` | server default (8000), 5 s | Bound on the briefing; bound on each record, update and release |
 
 ## Custom predicates

@@ -78,6 +78,38 @@ def test_each_message_is_recorded_once_in_order(client):
     assert resume.record([HumanMessage("no id")]) == 0
 
 
+def test_a_restored_thread_is_not_recorded_twice(client):
+    # The first process records a thread, then dies.
+    first = RecallResume("coder-1", client=client)
+    thread = [HumanMessage("find the charge calls", id="h1"), AIMessage("On it.", id="a1"),
+              HumanMessage("and the refund calls", id="h2")]
+    first.record(thread[:2])
+    # h2 reached the state but the process died before recording it.
+    first.release()
+
+    # The next process resumes on the same thread id: the checkpointer
+    # restores all three messages, and the caller adds one more.
+    second = RecallResume("coder-1", client=client)
+    restored = [*thread, HumanMessage("then open a PR", id="h3")]
+    assert second.record(restored) == 2
+    assert turns(client) == [
+        ("user", "find the charge calls", ""),
+        ("assistant", "On it.", ""),
+        ("user", "and the refund calls", ""),
+        ("user", "then open a PR", ""),
+    ]
+    assert [t.message_id for t in client.turns] == ["h1", "a1", "h2", "h3"]
+    assert second.record(restored) == 0
+
+
+def test_a_new_thread_after_resume_records_its_first_input(client):
+    first = RecallResume("coder-1", client=client)
+    first.record([HumanMessage("hello", id="h1")])
+    first.release()
+    second = RecallResume("coder-1", client=client)
+    assert second.record([HumanMessage("carry on", id="n1")]) == 1
+
+
 def test_a_held_agent_raises_lease_held_and_release_hands_it_over(client):
     with RecallResume("coder-1", client=client) as first:
         with pytest.raises(RecallError) as caught:
@@ -176,6 +208,27 @@ def test_a_react_agent_starts_from_the_briefing_and_records_every_message_once(c
     ]
     assert client.turns[2].content == "Working state saved (version 1)."
     assert json.loads(client.turns[1].content)["tool_calls"][0]["name"] == "update_working_state"
+
+
+def test_a_react_agent_resumed_on_its_old_thread_records_only_new_messages(client):
+    # The checkpointer outlives the process, as a Postgres or SQLite one would.
+    saver = InMemorySaver()
+    config = {"configurable": {"thread_id": "run-1"}}
+    # One scripted model for both processes, so its reply ids stay unique
+    # the way a real provider's are.
+    model = ScriptedChatModel(["Looking.", "Found three."])
+    with RecallResume("coder-1", client=client) as resume:
+        graph = react_agent(model, resume, checkpointer=saver)
+        graph.invoke({"messages": [("user", "Find the charge calls.")]}, config)
+    assert len(client.turns) == 2
+
+    # A new process resumes the agent and keeps using the same thread.
+    with RecallResume("coder-1", client=client) as resume:
+        graph = react_agent(model, resume, checkpointer=saver)
+        result = graph.invoke({"messages": [("user", "Any luck?")]}, config)
+        assert len(result["messages"]) == 4  # the checkpointer restored the first two
+
+    assert [c for _, c, _ in turns(client)] == ["Find the charge calls.", "Looking.", "Any luck?", "Found three."]
 
 
 async def test_a_react_agent_works_async_too(client):

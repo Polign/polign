@@ -68,11 +68,17 @@ What happens:
    next process can resume at once. A process that dies without releasing
    holds the lease until it expires (60 seconds by default).
 
-The resumed run starts with an empty `messages` state. Old messages are not
-replayed: the briefing already carries the recent turns as text, and a
-replayed tool result without its matching tool call would be refused by the
-model API. If you use a persistent checkpointer, start the resumed run on a
-new `thread_id`, so the old thread's messages are not restored as well.
+Recall never replays old messages into the state: the briefing already
+carries the recent turns as text, and a replayed tool result without its
+matching tool call would be refused by the model API. On a new `thread_id`,
+the resumed run starts from the briefing alone. On the old `thread_id`, a
+persistent checkpointer restores the old messages as well, and nothing is
+recorded twice: each turn keeps its message id, so the first recording after
+a resume skips every restored message up to the last one Recall already has.
+Messages after that one, such as the caller's new input or a reply the dead
+process never recorded, are recorded as usual. The model then sees the
+restored history and the briefing both; start a new thread if you would
+rather it saw only the briefing.
 
 `create_react_agent` is deprecated in LangGraph 1.0 in favor of
 `langchain.agents.create_agent`, but it still ships in `langgraph.prebuilt`

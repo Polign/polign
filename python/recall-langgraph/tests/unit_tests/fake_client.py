@@ -44,10 +44,14 @@ class FakeAgent:
         self.context: ResumeContext | None = None
         self.released = 0
 
-    def record_turn(self, role, content, name=None):
-        turn = Turn(seq=len(self.client.turns) + 1, role=role, content=content, name=name or "")
+    def record_turn(self, role, content, name=None, message_id=None):
+        turn = Turn(seq=len(self.client.turns) + 1, role=role, content=content, name=name or "",
+                    message_id=message_id or "")
         self.client.turns.append(turn)
         return turn
+
+    def recent_turns(self, limit=None):
+        return self.client.turns[-(limit or 20):]
 
     def update_working_state(self, **fields):
         current = self.client.state

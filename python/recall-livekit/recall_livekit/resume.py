@@ -31,10 +31,14 @@ class AgentResume:
     built from the working state and the most recent turns, instead of
     starting the conversation over.
 
-    Only one process may hold an agent. A worker that died still holds it
-    until its lease expires, so ``open`` retries for up to ``wait`` seconds.
-    The default ``lease_ttl`` of 15 seconds keeps that wait short; the lease is
-    renewed in the background while the call runs.
+    Only one process may write for an agent, and a worker that died still
+    holds its lease until the lease expires. The caller must not sit in
+    silence for that, so ``open`` reads the records without the lease and
+    returns the briefing at once; reading cannot conflict with anyone. Turns
+    are buffered while a background writer takes the lease, retrying for up to
+    ``wait`` seconds, and written in order once it has it. The default
+    ``lease_ttl`` of 6 seconds keeps that gap short; the lease is renewed in
+    the background while the call runs.
 
     Like the memory reads, resuming and recording fail open: if Recall is slow
     or down, the call goes on without a briefing and a warning is logged.
@@ -47,7 +51,7 @@ class AgentResume:
         agent_id: str,
         *,
         token_budget: int | None = None,
-        lease_ttl: float = 15.0,
+        lease_ttl: float = 6.0,
         wait: float | None = None,
         timeout: float = 5.0,
     ) -> None:
@@ -71,6 +75,14 @@ class AgentResume:
         self._queue: asyncio.Queue[tuple[str, str, str | None] | None] | None = None
         self._writer: asyncio.Task[None] | None = None
         self._session: AgentSession | None = None
+        self._held = asyncio.Event()
+        self._closing = False
+
+    @property
+    def lease_held(self) -> bool:
+        """True once the background writer holds the lease, so turns and
+        working state updates are being written."""
+        return self._held.is_set()
 
     @property
     def resumed(self) -> bool:
@@ -78,32 +90,26 @@ class AgentResume:
         return self._agent is not None
 
     async def open(self) -> ResumeContext | None:
-        """Take the agent's lease and read its records back. Returns the
-        context, or None when the resume failed (the reason is logged)."""
+        """Read the agent's records back and return the context, without
+        waiting for the lease; the background writer takes it. Returns None
+        when the resume failed (the reason is logged)."""
         if self._agent is not None:
             return self.context
         client = self.memory.client
-        deadline = time.monotonic() + self.wait
-        while True:
-            try:
-                # No timeout of our own here: a resume abandoned while it is
-                # still running would leave the lease held by this worker's
-                # session with nothing to release it. The client's timeout
-                # bounds the call instead.
-                self._agent = await asyncio.to_thread(
-                    client.resume, self.agent_id,
-                    token_budget=self.token_budget, lease_ttl=self.lease_ttl,
-                )
-                break
-            except RecallError as exc:
-                if exc.code == "lease_held" and time.monotonic() < deadline:
-                    # The worker that had this call may have died; its lease
-                    # runs out within lease_ttl.
-                    await asyncio.sleep(min(1.0, max(0.0, deadline - time.monotonic())))
-                    continue
-                logger.warning("resume failed for agent %r: %s", self.agent_id, _describe(exc))
-                return None
+        try:
+            # No timeout of our own here: a resume abandoned while it is still
+            # running would leave an agent in this worker's session with
+            # nothing to release it. The client's timeout bounds the call.
+            self._agent = await asyncio.to_thread(
+                client.resume, self.agent_id, token_budget=self.token_budget,
+                lease_ttl=self.lease_ttl, defer_lease=True,
+            )
+        except RecallError as exc:
+            logger.warning("resume failed for agent %r: %s", self.agent_id, _describe(exc))
+            return None
         self.context = self._agent.context
+        self._closing = False
+        self._held.clear()
         self._queue = asyncio.Queue()
         self._writer = asyncio.create_task(self._write_turns(), name="recall_resume_writer")
         return self.context
@@ -154,6 +160,10 @@ class AgentResume:
         if self._agent is None:
             raise RecallError("the agent is not resumed", code="not_resumed")
         agent = self._agent
+        if not self._held.is_set():
+            # Right after a new worker takes over, the old lease may still be
+            # running out. Wait for it rather than drop the update.
+            await asyncio.wait_for(self._held.wait(), self.wait)
         return await asyncio.wait_for(
             asyncio.to_thread(lambda: agent.update_working_state(**fields)), self.timeout
         )
@@ -162,6 +172,7 @@ class AgentResume:
         """Write the queued turns, then hand the lease over so the next
         worker need not wait for it to expire. Safe to call more than once."""
         self.detach()
+        self._closing = True
         agent, writer, queue = self._agent, self._writer, self._queue
         self._agent = self._writer = self._queue = None
         if queue is not None and writer is not None:
@@ -191,6 +202,23 @@ class AgentResume:
     async def _write_turns(self) -> None:
         assert self._queue is not None and self._agent is not None
         queue, agent = self._queue, self._agent
+        deadline = time.monotonic() + self.wait
+        while not self._closing:
+            try:
+                if await asyncio.wait_for(asyncio.to_thread(agent.acquire), self.timeout):
+                    self._held.set()
+                    break
+            except (RecallError, asyncio.TimeoutError) as exc:
+                logger.warning("taking the lease failed for agent %r: %s", self.agent_id, _describe(exc))
+            if time.monotonic() >= deadline:
+                # Someone else is still acting for this call. Writing now
+                # would interleave with them, so this worker records nothing.
+                logger.warning("agent %r is still held by another worker after %gs; "
+                               "this worker's turns are not recorded", self.agent_id, self.wait)
+                return
+            await asyncio.sleep(0.5)
+        if not self._held.is_set():
+            return
         while True:
             turn = await queue.get()
             if turn is None:

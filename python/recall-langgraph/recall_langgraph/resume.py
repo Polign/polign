@@ -37,11 +37,14 @@ class RecallResume:
     as one text for the model. The first use opens it; call ``open`` (or
     ``aopen``) yourself to resume at a point you choose.
 
-    The graph's ``messages`` state starts empty on resume. Old messages are
-    not replayed: the briefing already carries the recent turns as text, and a
-    replayed tool result without its matching call would be refused by the
-    model API. Your checkpointer keeps working as usual; start the resumed run
-    on a new thread id so it does not restore the old messages as well.
+    Old messages are not replayed into the state: the briefing already
+    carries the recent turns as text, and a replayed tool result without its
+    matching call would be refused by the model API. Your checkpointer keeps
+    working as usual. On a new thread id the resumed run starts from the
+    briefing alone; on the old thread id the checkpointer restores the old
+    messages too, and nothing is recorded twice: each turn keeps its message
+    id, so the first recording after a resume skips every restored message up
+    to the last one the records already have.
 
     For ``create_react_agent``, pass ``pre_model_hook`` and
     ``post_model_hook``. For your own StateGraph, call ``with_briefing`` on the
@@ -86,6 +89,7 @@ class RecallResume:
         # cannot record the same message twice.
         self._record_lock = threading.Lock()
         self._recorded: set[str] = set()
+        self._seeded = False
 
     # Lifecycle.
 
@@ -238,16 +242,37 @@ class RecallResume:
         and messages without text are skipped."""
         count = 0
         with self._record_lock:
+            if not self._seeded:
+                self._seed(messages)
+                self._seeded = True
             for message in messages:
                 key = _key(message)
                 if key in self._recorded or message.id == BRIEFING_ID:
                     continue
                 turn = _turn(message)
                 if turn is not None:
-                    self.agent.record_turn(*turn)
+                    self.agent.record_turn(*turn, message_id=message.id or None)
                     count += 1
                 self._recorded.add(key)
         return count
+
+    def _seed(self, messages: Sequence[BaseMessage]) -> None:
+        """Mark messages a checkpointer restored as already recorded.
+
+        The previous process recorded in order, so every message up to the
+        last one whose id the records hold was recorded, whether or not its
+        own id made it into the recent turns. Anything after that is new: the
+        caller's fresh input, or a message the previous process got but died
+        before recording, and both should be recorded now."""
+        if self.agent.context.turn_seq == 0:
+            return
+        known = {t.message_id for t in self.agent.recent_turns(200) if t.message_id}
+        last = -1
+        for i, message in enumerate(messages):
+            if message.id and message.id in known:
+                last = i
+        for message in messages[: last + 1]:
+            self._recorded.add(_key(message))
 
     async def arecord(self, messages: Sequence[BaseMessage]) -> int:
         return await asyncio.to_thread(self.record, messages)
