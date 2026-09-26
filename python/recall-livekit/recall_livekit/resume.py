@@ -216,7 +216,9 @@ class AgentResume:
                 logger.warning("agent %r is still held by another worker after %gs; "
                                "this worker's turns are not recorded", self.agent_id, self.wait)
                 return
-            await asyncio.sleep(0.5)
+            # Each try is one LIST on the store; once a second is plenty,
+            # since the caller is already being answered meanwhile.
+            await asyncio.sleep(1.0)
         if not self._held.is_set():
             return
         while True:
