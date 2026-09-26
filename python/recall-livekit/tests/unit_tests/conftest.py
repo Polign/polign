@@ -13,3 +13,10 @@ def memory():
     """A RecallMemory over the fake subprocess, fresh for every test."""
     with RecallMemory.open(command=[sys.executable, "-u", str(FAKE)], timeout=10) as mem:
         yield mem
+
+
+@pytest.fixture
+def agent_memory():
+    """A RecallMemory with the agent resume tools turned on."""
+    with RecallMemory.open(command=[sys.executable, "-u", str(FAKE)], timeout=10, agent=True) as mem:
+        yield mem

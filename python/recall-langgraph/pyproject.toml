@@ -3,17 +3,17 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "recall-livekit"
-version = "0.3.0"
-description = "Typed, correctable long-term memory for LiveKit voice agents, backed by Recall by Polign"
+name = "recall-langgraph"
+version = "0.1.0"
+description = "Resume LangGraph agents from their own records, backed by Recall by Polign"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [{ name = "Polign" }]
-keywords = ["livekit", "voice agent", "agent memory", "recall", "polign"]
+keywords = ["langgraph", "langchain", "agent memory", "resume", "recall", "polign"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: Apache Software License",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
@@ -22,7 +22,8 @@ classifiers = [
 ]
 dependencies = [
     "polign-recall>=0.4.0",
-    "livekit-agents>=1.8,<2",
+    "langgraph>=1.0,<2",
+    "langchain-core>=1.0,<2",
 ]
 
 [project.urls]
@@ -35,11 +36,11 @@ Issues = "https://github.com/Polign/polign/issues"
 ignore-vcs = true
 
 [tool.hatch.build.targets.sdist]
-include = ["recall_livekit/", "tests/", "README.md", "LICENSE"]
+include = ["recall_langgraph/", "tests/", "README.md", "LICENSE"]
 exclude = ["**/__pycache__", "**/.pytest_cache"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["recall_livekit"]
+packages = ["recall_langgraph"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from livekit.agents import llm
 from polign_recall import RecallError
 
 from .memory import SubjectMemory
+
+if TYPE_CHECKING:
+    from .resume import AgentResume
 
 OnChange = Callable[[], Awaitable[None]] | None
 
@@ -137,3 +140,46 @@ def build_forget_tool(memory: SubjectMemory, *, on_change: OnChange = None) -> l
         return f"Withdrew {count} remembered value(s) of {predicate}."
 
     return llm.function_tool(forget, raw_schema=schema)
+
+
+def build_working_state_tool(resume: AgentResume) -> llm.RawFunctionTool:
+    """An ``update_working_state`` tool: the note a resumed agent continues
+    from if the call drops and a new worker picks it up."""
+    strings = {"type": "array", "items": {"type": "string"}}
+    schema = {
+        "name": "update_working_state",
+        "description": (
+            "Save your working state for this call: what the caller needs, what is done, and "
+            "what you are doing now. If the call drops and continues on a new connection, this "
+            "note is what you pick up from. Fields you leave out are kept. Call it when "
+            "something changes, not on every turn."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "goal": {"type": "string", "description": "What the caller needs from this call."},
+                "progress": {"type": "string", "description": "What is done so far."},
+                "focus": {"type": "string", "description": "What you are doing right now."},
+                "plan": {**strings, "description": "The remaining steps, in order."},
+                "decisions": {**strings, "description": "Decisions made, each with its reason."},
+                "open_questions": {**strings, "description": "What is still unknown."},
+                "notes": {"type": "string", "description": "Anything else to carry over."},
+            },
+            "additionalProperties": False,
+        },
+    }
+    allowed = set(schema["parameters"]["properties"])
+
+    async def update_working_state(raw_arguments: dict[str, object]) -> str:
+        fields = {k: v for k, v in raw_arguments.items() if k in allowed and v not in (None, "", [])}
+        if not fields:
+            raise llm.ToolError("Give at least one field to save.")
+        try:
+            state = await resume.update_working_state(**fields)
+        except RecallError as exc:
+            raise llm.ToolError(f"The working state was not saved: {exc}") from exc
+        except asyncio.TimeoutError as exc:
+            raise llm.ToolError("Memory is slow right now; the working state was not saved.") from exc
+        return f"Working state saved (version {state.version})."
+
+    return llm.function_tool(update_working_state, raw_schema=schema)

@@ -123,6 +123,62 @@ await session.start(agent, room=ctx.room)
 `attach` adds the memory block and the `remember` tool. It does not do the
 per-turn search for overflowing callers; use `RecallAgent` for that.
 
+## Resuming a call after a worker dies
+
+If the worker running a call crashes, LiveKit hands the room to another
+worker, and by default the new agent starts the conversation over. With
+`resume`, it continues instead:
+
+```python
+def setup(proc: JobProcess) -> None:
+    proc.userdata["recall"] = RecallMemory.open(
+        local_dir="./recall-data", predicates=VOICE_REGISTRY, agent=True,
+    )
+
+# in the entrypoint
+agent = RecallAgent(
+    memory=memory,
+    instructions="You are the support line for Acme.",
+    resume=ctx.room.name,     # names the call, not the caller
+)
+```
+
+What changes:
+
+1. `on_enter` resumes the call's records before the first reply. When the
+   call is new, nothing else happens. When it was cut off, a
+   `<recall_resume>` block goes after the memory block with what the agent
+   had noted and the last turns, and tells the model not to greet the
+   caller again.
+2. Every user and agent message, and every tool call with its result, is
+   recorded as a turn in the background, in order.
+3. The model gets an `update_working_state` tool to note what the caller
+   needs, what is done, and what it is doing now. That note, with the
+   recent turns, is what the next worker continues from.
+4. `on_exit` (which also runs when the session closes) writes any queued
+   turns and releases the call.
+
+Only one worker may hold a call. A worker that died still holds it until
+its lease runs out, so the new agent retries for up to `lease_ttl` plus 5
+seconds before it speaks. Keep `lease_ttl` short for voice; the default is
+15 seconds, and the server accepts 5 seconds to 1 hour. Like the memory
+reads, resuming and recording fail open: if Recall is down, the call goes on
+without a briefing and a warning is logged.
+
+The id must be 1-128 letters, digits, `.`, `_` or `-`; map room names with
+other characters to one. For more options, pass an `AgentResume`:
+
+```python
+from recall_livekit import AgentResume
+
+resume = AgentResume(proc.userdata["recall"], ctx.room.name, lease_ttl=10, token_budget=2000)
+agent = RecallAgent(memory=memory, instructions="...", resume=resume)
+```
+
+Subclasses that override `on_exit` must `await super().on_exit()`. `attach`
+does not resume; use `RecallAgent` for that. Needs a `polign` CLI newer than
+0.7.4, the first with `polign mcp -agent`.
+
 ## Options
 
 | Where | Option | Default | What it does |
@@ -130,12 +186,17 @@ per-turn search for overflowing callers; use `RecallAgent` for that.
 | `RecallMemory.open` | `local_dir` | none | Keep the database in this directory and run its server; exclusive with `url` and `api_key` |
 | `RecallMemory.open` | `url`, `api_key`, `collection`, `predicates` | worker environment | Connection for the subprocess (`POLIGN_URL`, `POLIGN_API_KEY`, `POLIGN_COLLECTION`, `POLIGN_PREDICATES`) |
 | `RecallMemory.open` | `command` | `polign mcp -memory-only -write` | The subprocess argv, to run a `polign` binary other than the one pip installed |
+| `RecallMemory.open` | `agent` | off | Turn on the agent resume tools that `resume` needs (adds `-agent` to the default argv) |
 | `for_subject` | `limit` | 20 | Beliefs loaded into the prompt; above it, per-turn search kicks in |
 | `for_subject` | `read_timeout`, `write_timeout` | 0.5 s, 5 s | Reads fail open (last known beliefs); writes tell the model the fact was not saved |
 | `RecallAgent` | `context_template` | `<recall_memory>\n{context}\n</recall_memory>` | Wrapper around the block; must contain `{context}` |
 | `RecallAgent` | `who` | `"the caller"` | How the block refers to the person |
 | `RecallAgent` | `remember_tool`, `forget_tool` | on, off | Which tools the model gets |
 | `RecallAgent` | `search_when_overflowed` | on | Per-turn search when the caller has more beliefs than `limit` |
+| `RecallAgent` | `resume` | off | The call's agent id (such as the room name) or an `AgentResume`; continue the call from its records after a worker dies |
+| `RecallAgent` | `resume_template` | `<recall_resume>\n{context}\n</recall_resume>` | Wrapper around the resume block; must contain `{context}` |
+| `AgentResume` | `lease_ttl`, `wait` | 15 s, `lease_ttl` + 5 s | How long a dead worker keeps the call, and how long a new one waits for it |
+| `AgentResume` | `token_budget`, `timeout` | server default (8000), 5 s | Bound on the briefing; bound on each record, update and release |
 
 ## Custom predicates
 

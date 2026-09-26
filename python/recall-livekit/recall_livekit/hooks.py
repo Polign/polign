@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from livekit.agents import llm
 from livekit.agents.voice import Agent
 
@@ -22,6 +24,7 @@ class MemoryBinding:
         context_template: str = DEFAULT_TEMPLATE,
         who: str = "the caller",
         remember_tool: bool = True,
+        extra_block: Callable[[], str] | None = None,
     ) -> None:
         self.agent = agent
         self.memory = memory
@@ -29,6 +32,8 @@ class MemoryBinding:
         self.context_template = context_template
         self.who = who
         self.remember_tool = remember_tool
+        # Another block to append after the memory block, such as a resume briefing.
+        self.extra_block = extra_block
 
     def render(self) -> str:
         return render_beliefs(
@@ -42,7 +47,11 @@ class MemoryBinding:
     async def refresh(self) -> None:
         """Reload the caller's beliefs and rewrite the agent's instructions."""
         await self.memory.load()
-        await self.agent.update_instructions(compose_instructions(self.base_instructions, self.render()))
+        instructions = compose_instructions(self.base_instructions, self.render())
+        extra = self.extra_block() if self.extra_block is not None else ""
+        if extra:
+            instructions = compose_instructions(instructions, extra)
+        await self.agent.update_instructions(instructions)
 
     def turn_context(self, hits: list) -> str:
         """The block added to a turn when a per-turn search found more facts."""

@@ -4,6 +4,12 @@ Speaks just enough MCP over stdio for ``polign_recall.Client``: an in-memory
 belief store with single-valued supersession, multi-valued append, subject
 recall with optional word-overlap search, forget, and the registry. Subjects
 named ``slow`` stall and ``broken`` answer with an error, for failure tests.
+
+It also answers the agent tools of ``polign mcp -agent``: resume, release,
+working state and turns, with a lease that runs out after its TTL unless it is
+released. That lets one fake stand in for two workers, the second resuming
+after the first one "died" without releasing. An agent id starting with
+``down`` fails to resume, for outage tests.
 """
 
 import json
@@ -74,7 +80,67 @@ def forget(args):
     return {"withdrawn": len(matches)}
 
 
+agents: dict[str, dict] = {}  # agent id -> turns, working state, lease expiry
+
+
+def agent_record(agent_id):
+    return agents.setdefault(agent_id, {"turns": [], "state": {}, "version": 0, "expires": 0.0, "epoch": 0})
+
+
+def briefing(record):
+    lines = ["# Resuming your work"]
+    state = record["state"]
+    for key in ("goal", "progress", "focus"):
+        if state.get(key):
+            lines.append(f"{key.capitalize()}: {state[key]}")
+    if record["turns"]:
+        lines.append("## Your most recent turns, verbatim")
+        lines.extend(f"[{t['role']} #{t['seq']}] {t['content']}" for t in record["turns"][-5:])
+    return "\n".join(lines)
+
+
+def agent_tool(name, args):
+    agent_id = args["agent_id"]
+    if name == "agent_resume":
+        if agent_id.startswith("down"):
+            raise ValueError("backend unavailable")
+        ttl = args.get("lease_ttl_seconds") or 60
+        if not 5 <= ttl <= 3600:
+            raise ValueError("polign: HTTP 400: invalid argument: ttl must be between 5s and 1h0m0s")
+        record = agent_record(agent_id)
+        if record["expires"] > time.monotonic():
+            raise ValueError("recall: agent lease is held by another process")
+        record["expires"] = time.monotonic() + ttl
+        record["epoch"] += 1
+        record["resume_args"] = args
+        return {"agent_id": agent_id, "fresh": not record["turns"] and not record["state"],
+                "epoch": record["epoch"], "working_state": record["state"] or None,
+                "recent_turns": record["turns"][-5:], "omitted": {}, "turn_seq": len(record["turns"]),
+                "token_budget": args.get("token_budget") or 8000, "tokens": 10, "briefing": briefing(record)}
+    record = agent_record(agent_id)
+    if name == "agent_release":
+        released = record["expires"] > time.monotonic()
+        record["expires"] = 0.0
+        return {"released": released}
+    if name == "update_working_state":
+        record["state"].update({k: v for k, v in args.items() if k != "agent_id"})
+        record["version"] += 1
+        return {**record["state"], "version": record["version"]}
+    if name == "record_turn":
+        turn = {"seq": len(record["turns"]) + 1, "role": args["role"], "content": args["content"],
+                "at": "2026-09-26T00:00:00Z"}
+        if args.get("name"):
+            turn["name"] = args["name"]
+        record["turns"].append(turn)
+        return turn
+    if name == "recent_turns":
+        return record["turns"][-(args.get("limit") or 20):]
+    raise ValueError(f"no agent tool {name}")
+
+
 def handle(name, args):
+    if "agent_id" in args:
+        return {"content": [{"type": "text", "text": json.dumps(agent_tool(name, args))}]}
     subject = args.get("subject")
     if subject == "slow":
         time.sleep(0.5)

@@ -68,6 +68,7 @@ class RecallMemory:
         env: Mapping[str, str] | None = None,
         timeout: float = 30.0,
         write: bool = True,
+        agent: bool = False,
     ) -> RecallMemory:
         """Start the Recall subprocess and read its predicate registry.
 
@@ -82,6 +83,9 @@ class RecallMemory:
         unset falls through to the worker's environment. ``command`` replaces
         the default ``polign mcp -memory-only -write`` argv; the default runs
         the ``polign`` binary that pip installed with this package.
+
+        ``agent=True`` also turns on the agent resume tools, which
+        ``RecallAgent(resume=...)`` needs. It needs ``write=True``.
         """
         if local_dir is not None and (url is not None or api_key is not None):
             raise ValueError("local_dir runs its own server; do not pass url or api_key with it")
@@ -94,7 +98,8 @@ class RecallMemory:
         ):
             if value is not None:
                 merged[key] = value
-        client = Client(command=command, env=merged, timeout=timeout, write=write, local_dir=local_dir)
+        client = Client(command=command, env=merged, timeout=timeout, write=write,
+                        local_dir=local_dir, agent=agent)
         try:
             return cls(client)
         except BaseException:

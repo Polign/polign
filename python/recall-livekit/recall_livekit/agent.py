@@ -11,7 +11,8 @@ from livekit.agents.voice import Agent
 from .hooks import MemoryBinding
 from .memory import SubjectMemory
 from .render import DEFAULT_TEMPLATE
-from .tools import build_forget_tool, build_remember_tool
+from .resume import DEFAULT_RESUME_TEMPLATE, AgentResume
+from .tools import build_forget_tool, build_remember_tool, build_working_state_tool
 
 
 class RecallAgent(Agent):
@@ -23,8 +24,16 @@ class RecallAgent(Agent):
     than ``memory.limit``, each user turn also runs a search and adds the
     matching facts to that turn.
 
+    With ``resume`` (an agent id for the call, such as the room name, or an
+    ``AgentResume`` for more options), the agent also survives its worker
+    dying mid-call: ``on_enter`` resumes the call's records and appends the
+    briefing after the memory block, every conversation item and tool call is
+    recorded as a turn, the model gets an ``update_working_state`` tool, and
+    ``on_exit`` releases the call. It needs ``RecallMemory.open(..., agent=True)``.
+
     Subclasses that override ``on_enter`` must ``await super().on_enter()``
-    first, before generating a greeting. LiveKit runs ``on_enter`` as a task
+    first, before generating a greeting, and ones that override ``on_exit``
+    must ``await super().on_exit()``. LiveKit runs ``on_enter`` as a task
     after ``session.start`` returns; ``wait_for_memory`` awaits its first load.
     """
 
@@ -39,10 +48,17 @@ class RecallAgent(Agent):
         forget_tool: bool = False,
         search_when_overflowed: bool = True,
         tools: list[llm.Tool | llm.Toolset] | None = None,
+        resume: str | AgentResume | None = None,
+        resume_template: str = DEFAULT_RESUME_TEMPLATE,
         **kwargs: Any,
     ) -> None:
         if not isinstance(instructions, str):
             raise TypeError("RecallAgent needs plain string instructions")
+        if isinstance(resume, str):
+            resume = AgentResume(memory._memory, resume)
+        self._resume = resume
+        if "{context}" not in resume_template:
+            raise ValueError("resume template must contain a literal {context} placeholder")
         self._binding = MemoryBinding(
             self,
             memory,
@@ -50,6 +66,7 @@ class RecallAgent(Agent):
             context_template=context_template,
             who=who,
             remember_tool=remember_tool,
+            extra_block=(lambda: resume.render(resume_template)) if resume is not None else None,
         )
         self._search_when_overflowed = search_when_overflowed
         self._memory_loaded = asyncio.Event()
@@ -58,11 +75,18 @@ class RecallAgent(Agent):
             all_tools.append(build_remember_tool(memory, on_change=self.refresh_memory))
         if forget_tool:
             all_tools.append(build_forget_tool(memory, on_change=self.refresh_memory))
+        if resume is not None:
+            all_tools.append(build_working_state_tool(resume))
         super().__init__(instructions=instructions, tools=all_tools, **kwargs)
 
     @property
     def memory(self) -> SubjectMemory:
         return self._binding.memory
+
+    @property
+    def resume(self) -> AgentResume | None:
+        """The call's records, when resume was requested."""
+        return self._resume
 
     @property
     def base_instructions(self) -> str:
@@ -75,12 +99,19 @@ class RecallAgent(Agent):
 
     async def on_enter(self) -> None:
         try:
+            if self._resume is not None and await self._resume.open() is not None:
+                self._resume.attach(self.session)
             await self.refresh_memory()
         finally:
             self._memory_loaded.set()
 
+    async def on_exit(self) -> None:
+        if self._resume is not None:
+            await self._resume.release()
+
     async def wait_for_memory(self) -> None:
-        """Wait until ``on_enter`` has loaded the caller's beliefs. LiveKit runs
+        """Wait until ``on_enter`` has loaded the caller's beliefs (and resumed
+        the call, when resume was requested). LiveKit runs
         ``on_enter`` as a task after ``session.start`` returns, so tests and
         code that inspects the instructions right after start should await this."""
         await self._memory_loaded.wait()

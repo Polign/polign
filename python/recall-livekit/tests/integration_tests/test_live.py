@@ -1,20 +1,25 @@
 """The package against a real polign-server and the real ``polign mcp`` subprocess."""
 
+import asyncio
+import subprocess
+import time
 import uuid
 
+import pytest
 from livekit.agents.voice import AgentSession
 
-from recall_livekit import VOICE_REGISTRY, RecallAgent, RecallMemory
+from recall_livekit import VOICE_REGISTRY, AgentResume, RecallAgent, RecallMemory
 
 from tests.scripted import ScriptedLLM, seen_text
 
 
-def open_memory(polign, **kwargs):
+def open_memory(polign, collection=None, agent=False, **kwargs):
     url, cli = polign
     return RecallMemory.open(
-        command=[str(cli), "mcp", "-memory-only", "-write"],
+        command=[str(cli), "mcp", "-memory-only", "-write"] + (["-agent"] if agent else []),
         url=url,
-        collection="recall_livekit_" + uuid.uuid4().hex[:8],
+        collection=collection or "recall_livekit_" + uuid.uuid4().hex[:8],
+        agent=agent,
         predicates=VOICE_REGISTRY,
         timeout=30,
         **kwargs,
@@ -66,3 +71,56 @@ async def test_agent_round_trip_against_the_real_server(polign):
             await session.start(agent)
             await agent.wait_for_memory()
             assert "- timezone: Denver" in str(agent.instructions)
+
+
+async def test_a_call_continues_on_a_new_worker_after_the_old_one_dies(polign):
+    _, cli = polign
+    usage = subprocess.run([str(cli), "mcp", "-h"], capture_output=True, text=True)
+    if "-agent" not in usage.stdout + usage.stderr:
+        pytest.skip(f"{cli} has no `polign mcp -agent`")
+    collection = "recall_livekit_" + uuid.uuid4().hex[:8]
+    room = "room-" + uuid.uuid4().hex[:6]
+    caller = "caller-" + uuid.uuid4().hex[:6]
+
+    first = open_memory(polign, collection, agent=True)
+    try:
+        sam = first.for_subject(caller, read_timeout=5, write_timeout=10)
+        model = ScriptedLLM([
+            ("update_working_state", {"goal": "move the delivery", "progress": "new date is Friday"}),
+            "Friday works. Morning or afternoon?",
+        ])
+        session = AgentSession(llm=model)
+        agent = RecallAgent(memory=sam, instructions="Delivery line.",
+                            resume=AgentResume(first, room, lease_ttl=5, timeout=10))
+        await session.start(agent)
+        await agent.wait_for_memory()
+        assert agent.resume.context.fresh
+        await session.run(user_input="Can you move my delivery?")
+        # Wait for the background writer, then the worker dies: its
+        # subprocess is killed, so the lease is never released.
+        for _ in range(100):
+            if agent.resume._queue.empty():
+                break
+            await asyncio.sleep(0.05)
+        await asyncio.sleep(0.5)
+        first.client._process.kill()
+        agent.resume._writer.cancel()
+    finally:
+        first.close()
+
+    second = open_memory(polign, collection, agent=True)
+    try:
+        started = time.monotonic()
+        later = second.for_subject(caller, read_timeout=5, write_timeout=10)
+        async with AgentSession(llm=ScriptedLLM(["Morning then."])) as session:
+            agent = RecallAgent(memory=later, instructions="Delivery line.",
+                                resume=AgentResume(second, room, lease_ttl=5, wait=15, timeout=10))
+            await session.start(agent)
+            await agent.wait_for_memory()
+            instructions = str(agent.instructions)
+            assert agent.resume.resumed and not agent.resume.context.fresh
+            assert time.monotonic() - started >= 2  # waited out the dead worker's lease
+            for text in ("move the delivery", "Can you move my delivery?", "Friday works. Morning or afternoon?"):
+                assert text in instructions
+    finally:
+        second.close()
