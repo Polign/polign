@@ -1,0 +1,3 @@
+# The upgrade: a new image of the same agent that answers with a newer model.
+FROM localhost/agent:v1
+ENV AGENT_VERSION=v2 MODEL=gpt-4.1
