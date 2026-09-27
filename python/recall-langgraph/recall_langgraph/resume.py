@@ -251,7 +251,10 @@ class RecallResume:
                     continue
                 turn = _turn(message)
                 if turn is not None:
-                    self.agent.record_turn(*turn, message_id=message.id or None)
+                    role, content, name = turn
+                    brief = _brief(message)
+                    self.agent.record_turn(role, content, name, message_id=message.id or None,
+                                           brief=brief if brief and brief != content else None)
                     count += 1
                 self._recorded.add(key)
         return count
@@ -299,6 +302,35 @@ def _messages(state: Any) -> list[BaseMessage]:
     return list(messages)
 
 
+#: Arguments longer than this are shortened in the briefing. The record keeps
+#: them whole; a long argument (a file written, a message sent) usually lives
+#: on in what the call produced, so the next instance rarely needs it again.
+BRIEF_ARG_CHARS = 200
+
+
+def _call_text(call: Mapping[str, Any], limit: int | None) -> str:
+    """A tool call as the model would write it: name(arg=value, ...), with no
+    call id. With a limit, longer argument values are replaced by their
+    length."""
+    parts = []
+    for key, value in (call.get("args") or {}).items():
+        shown = json.dumps(value, ensure_ascii=False, default=str)
+        if limit is not None and len(shown) > limit:
+            size = len(value) if isinstance(value, str) else len(shown)
+            shown = f"<{size} chars>"
+        parts.append(f"{key}={shown}")
+    return f"{call['name']}({', '.join(parts)})"
+
+
+def _brief(message: BaseMessage) -> str | None:
+    """The shorter form of a model reply with tool calls, for the briefing."""
+    if not isinstance(message, AIMessage) or not message.tool_calls:
+        return None
+    text = _text(message.content)
+    calls = "\n".join(_call_text(c, BRIEF_ARG_CHARS) for c in message.tool_calls)
+    return f"{text}\n{calls}" if text else calls
+
+
 def _key(message: BaseMessage) -> str:
     if message.id:
         return message.id
@@ -333,10 +365,9 @@ def _turn(message: BaseMessage) -> tuple[str, str, str | None] | None:
     if isinstance(message, HumanMessage):
         return ("user", text, None) if text else None
     if isinstance(message, AIMessage):
-        calls = [{"name": c["name"], "args": c["args"], "id": c.get("id")} for c in message.tool_calls]
+        calls = "\n".join(_call_text(c, None) for c in message.tool_calls)
         if calls:
-            rendered = json.dumps({"tool_calls": calls}, ensure_ascii=False, default=str)
-            text = f"{text}\n{rendered}" if text else rendered
+            text = f"{text}\n{calls}" if text else calls
         return ("assistant", text, None) if text else None
     if isinstance(message, ToolMessage):
         return "tool", text or json.dumps(message.content, default=str), message.name

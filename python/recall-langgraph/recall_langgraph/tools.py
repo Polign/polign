@@ -49,8 +49,9 @@ def recall_tools(resume: RecallResume) -> list[BaseTool]:
     ) -> str:
         """Save your working state: the note your next instance resumes from if this run stops.
 
-        Fields you give replace the current ones; fields you leave out are kept. Write it at
-        natural boundaries, as a colleague taking over would need it.
+        Fields you give replace the current ones; fields you leave out are kept. Write it when
+        your plan or progress changes, not after every step, as a colleague taking over would
+        need it.
 
         Args:
             goal: What the whole task is for.
@@ -69,7 +70,9 @@ def recall_tools(resume: RecallResume) -> list[BaseTool]:
         return f"Working state saved (version {state.version})."
 
     def milestone(name: str, progress: str | None = None) -> str:
-        """Declare that you reached a durable point, such as tests passing or a section drafted.
+        """Declare a durable point worth keeping, such as tests passing or a section drafted.
+
+        Not every step: a milestone marks a stretch of work done.
 
         If this run stops, the next instance loses at most the work since the last milestone.
 

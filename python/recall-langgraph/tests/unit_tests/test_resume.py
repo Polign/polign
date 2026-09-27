@@ -63,7 +63,7 @@ def test_each_message_is_recorded_once_in_order(client):
     assert resume.record(messages[:3]) == 3
     assert resume.record(messages) == 4
     assert resume.record(messages) == 0
-    calls = json.dumps({"tool_calls": [{"name": "grep", "args": {"pattern": "charge("}, "id": "c1"}]})
+    calls = 'grep(pattern="charge(")'
     assert turns(client) == [
         ("user", "find the charge calls", ""),
         ("assistant", calls, ""),
@@ -71,11 +71,24 @@ def test_each_message_is_recorded_once_in_order(client):
         ("assistant", "Found one.", ""),
         ("system", "be brief", ""),
         ("user", "[image_url]", ""),
-        ("assistant", 'Checking.\n{"tool_calls": [{"name": "grep", "args": {}, "id": "c2"}]}', ""),
+        ("assistant", "Checking.\ngrep()", ""),
     ]
     # a message built by hand without an id is told apart by its content
     assert resume.record([HumanMessage("no id")]) == 1
     assert resume.record([HumanMessage("no id")]) == 0
+
+
+def test_long_tool_arguments_are_shortened_only_in_the_brief(client):
+    resume = RecallResume("coder-1", client=client)
+    body = "import billing\n" * 40
+    call = {"name": "write_file", "args": {"path": "a.py", "content": body}, "id": "c9"}
+    resume.record([AIMessage("", id="a9", tool_calls=[call]), AIMessage("", id="a10",
+                   tool_calls=[{"name": "read_file", "args": {"path": "a.py"}, "id": "c10"}])])
+    written, read = client.turns
+    assert written.content == f"write_file(path=\"a.py\", content={json.dumps(body)})"
+    assert written.brief == f'write_file(path="a.py", content=<{len(body)} chars>)'
+    assert "c9" not in written.content  # call ids are useless to the next model
+    assert read.brief == ""  # short calls need no separate brief
 
 
 def test_a_restored_thread_is_not_recorded_twice(client):
@@ -207,7 +220,7 @@ def test_a_react_agent_starts_from_the_briefing_and_records_every_message_once(c
         ("user", ""), ("assistant", ""),
     ]
     assert client.turns[2].content == "Working state saved (version 1)."
-    assert json.loads(client.turns[1].content)["tool_calls"][0]["name"] == "update_working_state"
+    assert client.turns[1].content.startswith("update_working_state(")
 
 
 def test_a_react_agent_resumed_on_its_old_thread_records_only_new_messages(client):

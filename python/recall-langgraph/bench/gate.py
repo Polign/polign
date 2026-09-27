@@ -94,9 +94,9 @@ TASK = (
 
 SYSTEM = (
     "You are a careful coding agent. Keep your working state current with update_working_state "
-    "(goal, plan, progress, focus) as you go, and call milestone after each file you finish, so "
-    "that if this process dies, the next one can continue from your notes. Files already on disk "
-    "are real: if you are resuming, check them before redoing work."
+    "(goal, plan, progress, focus) when your plan or progress changes, and call milestone when a "
+    "group of files is done, so that if this process dies, the next one can continue from your "
+    "notes. Files already on disk are real: if you are resuming, do not redo work they show is done."
 )
 
 
@@ -260,8 +260,8 @@ def run_trial(kind: str, n: int, args: argparse.Namespace, root: Path, kill_at: 
 def start_recall(directory: Path) -> None:
     """Start one local Recall server for the whole run and point every worker
     at it through the environment they inherit."""
-    import polign_db
-    polign = polign_db.find_bin("polign")
+    from polign_recall.client import polign_bin
+    polign = polign_bin()
     subprocess.run([polign, "recall", "setup", "-local", "-no-plugin", "-config-dir", str(directory)],
                    check=True, capture_output=True, env={k: v for k, v in os.environ.items() if not k.startswith("POLIGN_")})
     os.environ["POLIGN_URL"] = json.loads((directory / "runtime.json").read_text())["url"]
@@ -298,6 +298,8 @@ def main() -> None:
     p.add_argument("--out", default=str(HERE / "results"))
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--parallel", type=int, default=1, help="trials to run at once")
+    p.add_argument("--kill-max", type=int, default=0,
+                   help="spread kill points from call 2 to this call instead of across the whole run")
     # Worker-only flags.
     p.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     for flag in ("--agent", "--workspace", "--ledger", "--phase"):
@@ -343,7 +345,7 @@ def main() -> None:
     # Kill points spread evenly over the run, from the second call to 90%
     # of a typical run, then shuffled together with the baselines so drift
     # in the API affects both kinds alike.
-    hi = max(2, int(typical * 0.9))
+    hi = args.kill_max or max(2, int(typical * 0.9))
     plan += [("crashed", n, 2 + round(n * (hi - 2) / max(1, args.crashed - 1))) for n in range(args.crashed)]
     rng.shuffle(plan)
 

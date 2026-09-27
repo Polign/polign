@@ -58,9 +58,12 @@ What happens:
    graph's `messages` state never holds it.
 3. The hooks record each new message once, in order, as a turn: human
    messages before the model call, the model's reply right after it, and tool
-   results before the next call. A reply with tool calls is recorded with the
-   calls as JSON text. A turn longer than the output threshold is stored whole
-   as an output, and the briefing shows a reference the model can pass to
+   results before the next call. A reply with tool calls is recorded as the
+   calls themselves, `name(arg=value)`, without call ids. In the briefing,
+   arguments longer than 200 characters are shortened to their length (the
+   record keeps them whole), since what a long argument produced usually
+   survives it. A turn longer than the output threshold is stored whole as an
+   output, and the briefing shows a reference the model can pass to
    `fetch_output`.
 4. The model keeps its working state current through the tools from
    `recall_tools`.

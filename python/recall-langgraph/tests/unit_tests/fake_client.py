@@ -44,9 +44,9 @@ class FakeAgent:
         self.context: ResumeContext | None = None
         self.released = 0
 
-    def record_turn(self, role, content, name=None, message_id=None):
+    def record_turn(self, role, content, name=None, message_id=None, brief=None):
         turn = Turn(seq=len(self.client.turns) + 1, role=role, content=content, name=name or "",
-                    message_id=message_id or "")
+                    message_id=message_id or "", brief=brief or "")
         self.client.turns.append(turn)
         return turn
 
