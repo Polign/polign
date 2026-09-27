@@ -11,3 +11,6 @@ python/build/
 examples/livekit/.env
 examples/livekit/memory-api-key
 recall-data/
+
+# Gate harness output (python/recall-langgraph/bench/gate.py --out default)
+python/recall-langgraph/bench/results/
