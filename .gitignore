@@ -14,3 +14,6 @@ recall-data/
 
 # Gate harness output (python/recall-langgraph/bench/gate.py --out default)
 python/recall-langgraph/bench/results/
+
+# macOS Finder metadata
+.DS_Store
