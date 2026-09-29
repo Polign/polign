@@ -52,7 +52,7 @@ private API-key file once (keep the same file across restarts):
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install 'polign_db>=0.7.0'
+pip install 'polign_db>=0.8.1'
 python - <<'PY'
 import os, secrets
 with os.fdopen(os.open('memory-api-key', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as f:
