@@ -46,8 +46,10 @@ truth. Typed remember remains available when the fields are already known.
 
 Correct a fact by remembering its replacement under the same subject/predicate.
 The registry decides whether values replace or accumulate; the fold decides what
-is currently believed. Use returned event IDs and memory_history when explaining
-a change. recall with as_of reads the beliefs at a past observation time.
+is currently believed. Each belief recall returns lists under `replaced` the
+value it replaced, when that was stated, and its source. Answer from the current
+value, and mention the correction when it matters to the answer. Use
+memory_history for the full chain. recall with as_of reads the beliefs at a past observation time.
 
 Forgetting appends a retraction and preserves history; it does not erase personal
 data. Pass a typed value for targeted retraction; omitting value withdraws all
