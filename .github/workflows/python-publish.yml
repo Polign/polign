@@ -155,7 +155,12 @@ jobs:
           cd "$RUNNER_TEMP"
           test "$(python -c 'import polign_db; print(polign_db.__version__)')" = "$PKG_VERSION"
           polign-server -version
-          "$(python -c 'import polign_db; print(polign_db.find_bin("polign"))')" recall setup -local -no-plugin -config-dir "$RUNNER_TEMP/recall-smoke"
+          polign -version
+          # Recall ships its own binary now. The released polign-recall must
+          # run its local memory database on the polign-server from this wheel.
+          python -m pip install polign-recall
+          test "$(python -m pip show polign_db | sed -n 's/^Version: //p')" = "$PKG_VERSION"
+          recall setup -local -no-plugin -config-dir "$RUNNER_TEMP/recall-smoke"
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
