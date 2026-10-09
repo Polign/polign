@@ -96,23 +96,24 @@ def ready_pod(old_uid=None):
     raise RuntimeError('replacement pod did not become ready')
 
 
-def mcp(key, name, arguments):
-    request = {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
-               'params': {'name': name, 'arguments': arguments}}
-    for attempt in range(10):
-        result = kubectl('exec', '-i', 'deployment/polign', '--', 'polign',
-                         '-url', 'http://127.0.0.1:23000', '-key', key,
-                         'mcp', '-collection', 'recall_smoke', '-memory-only', '-write',
-                         data=json.dumps(request) + '\n')
-        response = json.loads(result)
-        if 'error' not in response and not response['result'].get('isError'):
-            return json.loads(response['result']['content'][0]['text'])
-        # Startup persistence can change the visible log while a view is built.
-        # Retry only this explicit read error, never uncertain writes.
-        if name == 'recall' and 'log changed while materializing; retry' in result and attempt < 9:
-            time.sleep(.2)
-            continue
-        raise RuntimeError(f'MCP {name}: {response}')
+def polign(key, *command):
+    """Run the polign CLI inside the server pod against its own HTTP port."""
+    return kubectl('exec', 'deployment/polign', '--', 'polign',
+                   '-url', 'http://127.0.0.1:23000', '-key', key, *command)
+
+
+def value(key, record):
+    """The stored value of one record, or None when it does not exist."""
+    try:
+        return json.loads(polign(key, 'get', 'recall_smoke', record))['metadata']['value']
+    except RuntimeError as exc:
+        if '404' in str(exc) or 'not found' in str(exc).lower():
+            return None
+        raise
+
+
+def total(key):
+    return int(polign(key, 'list', 'recall_smoke').strip().splitlines()[-1].split()[-1])
 
 
 def exercise(store, extra):
@@ -127,13 +128,16 @@ def exercise(store, extra):
     output = kubectl('exec', 'deployment/polign', '--', 'polign-apikey', '-store', store,
                      'create', '-namespace', 'test:agent')
     key = next(line.strip() for line in output.splitlines() if line.startswith('plgn_'))
-    pair = {'subject': 'kubernetes-test', 'predicate': 'prefers_editor'}
-    mcp(key, 'remember', {**pair, 'value': 'vim'})
-    mcp(key, 'remember', {**pair, 'value': 'neovim'})
+    # A record replaced in place and a second one beside it: what survives a
+    # restart must be the newest value and every record.
+    polign(key, 'put', 'recall_smoke', 'editor', '-values', '1,0,0', '-meta', 'value=vim')
+    polign(key, 'put', 'recall_smoke', 'editor', '-values', '1,0,0', '-meta', 'value=neovim')
+    polign(key, 'put', 'recall_smoke', 'shell', '-values', '0,1,0', '-meta', 'value=zsh')
 
     def check_current():
-        assert [b['value'] for b in mcp(key, 'recall', pair)] == ['neovim']
-        assert len(mcp(key, 'memory_history', pair)) == 2
+        assert value(key, 'editor') == 'neovim'
+        assert value(key, 'shell') == 'zsh'
+        assert total(key) == 2
 
     check_current()
     with forward('pod/' + pod['metadata']['name'], 23000) as url:
@@ -153,16 +157,17 @@ def exercise(store, extra):
          'podAnnotations.rollout=upgrade-test', '--wait', '--timeout', '180s')
     pod = ready_pod(pod['metadata']['uid'])
     check_current()
-    mcp(key, 'forget', {**pair, 'value': 'neovim'})
+    polign(key, 'delete', 'recall_smoke', 'editor')
     helm('uninstall', 'polign', '--wait', '--timeout', '180s')
     helm('install', 'polign', args.chart, '--set-string', f'store.uri={store}',
          '--set-string', f'image.repository={repository}', '--set-string', f'image.tag={tag}',
          '--set', 'resources.requests.cpu=100m', '--wait', '--timeout', '180s', *extra)
     ready_pod()
-    assert mcp(key, 'recall', pair) == []
-    assert len(mcp(key, 'memory_history', pair)) == 3
+    assert value(key, 'editor') is None
+    assert value(key, 'shell') == 'zsh'
+    assert total(key) == 1
     helm('uninstall', 'polign', '--wait', '--timeout', '180s')
-    print(f'PASS {store.split(":")[0]}: authentication, correction, draining, pod replacement, Helm upgrade, uninstall/reinstall, history and retraction', flush=True)
+    print(f'PASS {store.split(":")[0]}: authentication, replacement, draining, pod replacement, Helm upgrade, uninstall/reinstall, deletion', flush=True)
 
 
 kubectl('create', 'namespace', namespace)
