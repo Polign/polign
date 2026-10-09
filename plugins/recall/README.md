@@ -24,36 +24,34 @@ there's no extra model to install or embedding API key to obtain.
 
 ## Get started
 
-Install [Claude Code](https://code.claude.com/docs/en/quickstart) and
-[Polign v0.6.4 or later](https://github.com/Polign/polign#install) first.
-If you already have Recall running, keep your existing database and see
+Install [Claude Code](https://code.claude.com/docs/en/quickstart), then the
+`recall` command. On macOS with Homebrew:
+
+```sh
+brew install polign/tap/recall
+```
+
+Or with pip, on macOS, Linux or Windows:
+
+```sh
+pip install polign-recall
+```
+
+Either way you also get `polign-server`, the database Recall keeps memories in.
+Then run:
+
+```sh
+recall setup
+```
+
+Setup starts a private database on your computer, checks that memory reads and
+the MCP tools work, and installs this plugin into Claude. Restart Claude Code,
+then try the memory prompts above. The database starts again by itself the
+next time Claude connects, and your memories stay in
+`~/.config/polign/recall/data`.
+
+If you already have Recall running against a database, keep it: see
 [connection settings](docs/setup.md#connect-to-an-existing-database).
-
-**Start the database in your terminal:**
-
-```sh
-polign-server -store "fs:$HOME/.local/share/recall/data"
-```
-
-Leave that terminal open. Open another terminal and start Claude:
-
-```sh
-claude
-```
-
-**Run these commands one at a time inside Claude:**
-
-```text
-/plugin marketplace add Polign/polign
-```
-
-```text
-/plugin install recall@polign
-```
-
-Restart Claude Code, then try the memory prompts above. Memories stay in
-`~/.local/share/recall/data` after you stop the database; start it again with the
-same command when you need it.
 
 ## A few things to try
 
@@ -76,8 +74,7 @@ It does not permanently delete the record.
 Run `/mcp` inside Claude to see the Recall connection's status. If it failed,
 check that your database is still running, then restart Claude to retry.
 
-The [setup guide](docs/setup.md) covers occupied ports, multiple Polign
-installations, other databases, and the upcoming `polign recall setup` command.
-That command is still in development and is not part of Polign v0.6.5.
+The [setup guide](docs/setup.md) covers other databases, occupied ports, and
+`recall doctor`, which checks a saved setup end to end.
 
 For the Python client and Go library, visit [Recall](https://github.com/Polign/recall).
