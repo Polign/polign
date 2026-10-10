@@ -20,11 +20,15 @@ spec.loader.exec_module(build_wheels)
 FILES = {"polign": b"cli-binary", "polign-server": b"server-binary", "polign-import": b"unused", "LICENSE": b"license text"}
 
 
-def release(directory: Path, skip: str | None = None) -> Path:
+DOCS = ("LICENSE", "THIRD_PARTY_NOTICES")
+
+
+def release(directory: Path, skip: str | None = None, extra: dict[str, bytes] | None = None) -> Path:
     """A fake release directory: one tar.gz, one zip, and checksums.txt."""
+    files = FILES | (extra or {})
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tf:
-        for name, blob in FILES.items():
+        for name, blob in files.items():
             if name != skip:
                 info = tarfile.TarInfo(name)
                 info.size = len(blob)
@@ -32,8 +36,8 @@ def release(directory: Path, skip: str | None = None) -> Path:
     (directory / "polign_db_linux_amd64.tar.gz").write_bytes(buf.getvalue())
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
-        for name, blob in FILES.items():
-            zf.writestr(name if name == "LICENSE" else name + ".exe", blob)
+        for name, blob in files.items():
+            zf.writestr(name if name in DOCS else name + ".exe", blob)
     (directory / "polign_db_windows_amd64.zip").write_bytes(buf.getvalue())
     (directory / "checksums.txt").write_text("".join(
         f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n" for p in sorted(directory.glob("polign_db_*"))))
@@ -62,6 +66,25 @@ def test_linux_wheel(tmp_path: Path) -> None:
     assert wheel.getinfo("polign_db-0.7.0.post1.data/scripts/polign").external_attr >> 16 == 0o100755
     tags = [line for line in wheel.read("polign_db-0.7.0.post1.dist-info/WHEEL").decode().splitlines() if line.startswith("Tag: ")]
     assert tags == ["Tag: py3-none-manylinux2014_x86_64", "Tag: py3-none-manylinux_2_17_x86_64", "Tag: py3-none-musllinux_1_1_x86_64"]
+
+
+def test_wheel_carries_third_party_notices(tmp_path: Path) -> None:
+    release(tmp_path, extra={"THIRD_PARTY_NOTICES": b"notices text"})
+    for archive in ("polign_db_linux_amd64.tar.gz", "polign_db_windows_amd64.zip"):
+        wheel = build(tmp_path, archive)
+        assert wheel.read("polign_db-0.7.0.dist-info/licenses/THIRD_PARTY_NOTICES") == b"notices text"
+        metadata = wheel.read("polign_db-0.7.0.dist-info/METADATA").decode()
+        assert "License-File: LICENSE\nLicense-File: THIRD_PARTY_NOTICES\n" in metadata
+        wheel.close()
+        for whl in (tmp_path / "dist").glob("*.whl"):
+            whl.unlink()
+
+
+def test_wheel_without_notices_still_builds(tmp_path: Path) -> None:
+    release(tmp_path)
+    wheel = build(tmp_path, "polign_db_linux_amd64.tar.gz")
+    assert not any(n.endswith("THIRD_PARTY_NOTICES") for n in wheel.namelist())
+    assert "License-File: LICENSE\nKeywords:" in wheel.read("polign_db-0.7.0.dist-info/METADATA").decode()
 
 
 def test_record_matches_contents(tmp_path: Path) -> None:

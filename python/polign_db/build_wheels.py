@@ -49,8 +49,7 @@ Version: {version}
 Summary: The polign_db server and CLI binaries, installable with pip
 Author: Polign
 License-Expression: LicenseRef-Polign-Software-License
-License-File: LICENSE
-Keywords: polign,vector database,agent memory,recall
+{license_files}Keywords: polign,vector database,agent memory,recall
 Project-URL: Homepage, https://polign.com
 Project-URL: Documentation, https://polign.com/developers.html
 Project-URL: Repository, https://github.com/Polign/polign
@@ -82,6 +81,11 @@ def fetch(name: str, release: str, archives: Path | None) -> bytes:
         return response.read()
 
 
+# Third-party license text. Archives from releases before it shipped lack it,
+# so it is carried when present rather than required.
+NOTICES = "THIRD_PARTY_NOTICES"
+
+
 def checksums(text: str) -> dict[str, str]:
     out = {}
     for line in text.splitlines():
@@ -93,7 +97,7 @@ def checksums(text: str) -> dict[str, str]:
 
 def members(archive_name: str, data: bytes) -> dict[str, bytes]:
     """Basename -> bytes for the files the wheel needs."""
-    wanted = {"LICENSE"} | {b + ext for b in BINARIES for ext in ("", ".exe")}
+    wanted = {"LICENSE", NOTICES} | {b + ext for b in BINARIES for ext in ("", ".exe")}
     found: dict[str, bytes] = {}
     if archive_name.endswith(".zip"):
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
@@ -131,12 +135,18 @@ def build_wheel(archive_name: str, data: bytes, version: str, out: Path) -> Path
         ("polign_db/py.typed", b"", False),
     ]
     entries += [(f"{scripts}/{b}{ext}", files[b + ext], True) for b in BINARIES]
+    license_files = ["LICENSE"] + ([NOTICES] if NOTICES in files else [])
+    metadata = METADATA.format(
+        version=version,
+        readme=(HERE / "README.md").read_text(),
+        license_files="".join(f"License-File: {n}\n" for n in license_files),
+    )
     entries += [
-        (f"{dist_info}/METADATA", METADATA.format(version=version, readme=(HERE / "README.md").read_text()).encode(), False),
+        (f"{dist_info}/METADATA", metadata.encode(), False),
         (f"{dist_info}/WHEEL", ("Wheel-Version: 1.0\nGenerator: polign_db build_wheels\nRoot-Is-Purelib: false\n"
                                 + "".join(f"Tag: py3-none-{t}\n" for t in tags)).encode(), False),
-        (f"{dist_info}/licenses/LICENSE", files["LICENSE"], False),
     ]
+    entries += [(f"{dist_info}/licenses/{n}", files[n], False) for n in license_files]
     record = "".join(
         f"{path},sha256={base64.urlsafe_b64encode(hashlib.sha256(blob).digest()).rstrip(b'=').decode()},{len(blob)}\n"
         for path, blob, _ in entries

@@ -27,6 +27,10 @@ for arch in ('amd64', 'arm64'):
             path=target/name
             path.write_bytes(tar.extractfile(members[name]).read())
             path.chmod(0o755)
-        (destination/'bin/LICENSE').write_bytes(tar.extractfile(members['LICENSE']).read())
+        for name in ('LICENSE', 'THIRD_PARTY_NOTICES'):
+            if name in members:
+                (destination/'bin'/name).write_bytes(tar.extractfile(members[name]).read())
+        if 'LICENSE' not in members:
+            raise SystemExit(archive.name+' has no LICENSE')
 print('Verified and extracted both Linux architectures')
 PY
