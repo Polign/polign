@@ -1,6 +1,6 @@
 {
   "name": "@polign/openclaw-recall",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Long-term memory for OpenClaw agents, kept in Recall by Polign: corrections replace, history stays, reads as of any time.",
   "license": "Apache-2.0",

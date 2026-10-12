@@ -23,10 +23,13 @@ What Recall adds over a search index:
 - OpenClaw 2026.10.2 or later on Node 24.16 or later.
 - `recall` 0.16.0 or later: `brew install polign/tap/recall` or
   `pip install polign-recall`. Either way you also get `polign-server`.
-- A model for working facts out of text, as `provider:model`, with that
-  provider's key in the environment (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`).
-  Without one, Recall keeps captured text as written: searchable, but nothing
-  replaces anything, and `memory_forget` is refused.
+- A model for working facts out of text, as `provider:model`: a hosted one
+  such as `anthropic:claude-haiku-4-5-20251001` with its key in the
+  environment, or a local one such as `ollama:qwen3:8b`. Without one, Recall
+  keeps captured text as written: searchable, but nothing replaces anything,
+  and `memory_forget` is refused. A small local model misses some phrasings;
+  in testing, qwen3:8b caught "I live in Bellevue now" but not "I moved to
+  Bellevue last week".
 
 ## Run the memory server
 
@@ -52,6 +55,10 @@ key in `POLIGN_API_KEY`; see [Run polign_db](https://polign.com/developers).
 openclaw plugins install @polign/openclaw-recall
 ```
 
+OpenClaw asks you to confirm, because the package is not yet traced to a
+signed build. In a script, add `--force --accept-capabilities`. The
+[local example](../../examples/openclaw) does all of the steps below for you.
+
 Then in `openclaw.json`:
 
 ```json
@@ -76,7 +83,18 @@ Then in `openclaw.json`:
 `hooks.allowConversationAccess` lets the plugin read the prompt and the turn's
 messages, which auto-recall and auto-capture need; OpenClaw asks this of every
 plugin it did not ship. Put the key in `RECALL_API_KEY` or write it in place of
-`${RECALL_API_KEY}`. Restart the gateway, then:
+`${RECALL_API_KEY}`.
+
+Then turn off the built-in memory plugin. OpenClaw 2026.10 keeps it loaded
+even when the slot points elsewhere, and it registers `memory_search` first,
+so without this step the agent's searches go to the workspace Markdown files
+instead of Recall:
+
+```sh
+openclaw plugins disable memory-core
+```
+
+Restart the gateway, then:
 
 ```sh
 openclaw recall status
@@ -110,6 +128,10 @@ And two hooks, each on by default:
 - **Auto-capture** (`agent_end`): after a successful turn, sends the latest
   `captureMessages` user and assistant messages to Recall as one passage.
   Injected memory blocks are stripped first, so memory never feeds itself.
+  The capture runs in the background, one at a time, because extraction can
+  take longer than the 30 seconds OpenClaw waits for a hook. It needs a
+  process that stays up, such as the gateway: a one-shot
+  `openclaw agent --local` exits before the capture finishes.
 
 ## Settings
 
@@ -124,7 +146,8 @@ for the first two.
 | `autoCapture` | `true` | Send the recent conversation to Recall after each turn. |
 | `maxMemories` | `5` | How many memories auto-recall injects. |
 | `captureMessages` | `10` | How many of the latest messages auto-capture sends. |
-| `timeoutMs` | `10000` | Per-request timeout. |
+| `timeoutMs` | `60000` | How long the agent's memory tools wait. Storing waits for the extraction model. Auto-recall waits at most 10 seconds, inside OpenClaw's 15 second hook limit. |
+| `captureTimeoutMs` | `120000` | How long one background capture waits. |
 
 ## What works differently from the built-in memory
 

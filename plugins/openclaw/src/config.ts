@@ -14,9 +14,17 @@ export type RecallPluginConfig = {
   maxMemories: number;
   /** How many of the latest messages auto-capture sends. */
   captureMessages: number;
-  /** Per-request timeout. */
+  /** Timeout for the agent's tool calls. Storing waits for the extraction model. */
   timeoutMs: number;
+  /** Timeout for one auto-capture, which runs in the background after the turn. */
+  captureTimeoutMs: number;
 };
+
+/**
+ * OpenClaw stops waiting for a before_prompt_build hook after 15 seconds, so
+ * auto-recall gives up well before that and the turn goes ahead without it.
+ */
+export const AUTO_RECALL_TIMEOUT_MS = 10_000;
 
 export const DEFAULT_URL = "http://127.0.0.1:8080";
 
@@ -48,6 +56,7 @@ export function resolveConfig(
     autoCapture: bool("autoCapture", true),
     maxMemories: num("maxMemories", 5, 1),
     captureMessages: num("captureMessages", 10, 1),
-    timeoutMs: num("timeoutMs", 10_000, 100),
+    timeoutMs: num("timeoutMs", 60_000, 100),
+    captureTimeoutMs: num("captureTimeoutMs", 120_000, 100),
   };
 }

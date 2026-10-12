@@ -9,7 +9,7 @@
 import { Type, type Static } from "typebox";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 import { RecallClient, RecallError, type Memory, type RememberResult } from "./src/client.ts";
-import { resolveConfig, type RecallPluginConfig } from "./src/config.ts";
+import { AUTO_RECALL_TIMEOUT_MS, resolveConfig, type RecallPluginConfig } from "./src/config.ts";
 import { buildTranscript, describeMemory, renderMemoryContext } from "./src/context.ts";
 
 export const PLUGIN_ID = "recall";
@@ -56,7 +56,17 @@ const forgetParams = Type.Object({
 });
 
 export function createPlugin(deps: { client?: RecallClient; config?: RecallPluginConfig } = {}) {
+  // Captures run one at a time, after the turn, so a slow extraction model
+  // neither holds up the agent nor runs several extractions at once.
+  let captures: Promise<void> = Promise.resolve();
+  let queued = 0;
+  const MAX_QUEUED_CAPTURES = 8;
+
   return {
+    /** Resolves once every capture queued so far has finished. */
+    idle(): Promise<void> {
+      return captures;
+    },
     id: PLUGIN_ID,
     name: "Memory (Recall)",
     description:
@@ -127,7 +137,7 @@ export function createPlugin(deps: { client?: RecallClient; config?: RecallPlugi
           const prompt = (event.currentUserMessage ?? event.prompt ?? "").trim();
           if (prompt.length < 5) return;
           try {
-            const out = await client.recall({ question: prompt });
+            const out = await client.recall({ question: prompt }, undefined, Math.min(cfg.timeoutMs, AUTO_RECALL_TIMEOUT_MS));
             const block = renderMemoryContext(out.memories ?? [], cfg.maxMemories);
             if (!block) return;
             log.info(`recall: ${Math.min(out.memories.length, cfg.maxMemories)} memories in front of the prompt`);
@@ -144,15 +154,28 @@ export function createPlugin(deps: { client?: RecallClient; config?: RecallPlugi
           if (!event.success || !Array.isArray(event.messages) || event.messages.length === 0) return;
           const passage = buildTranscript(event.messages, cfg.captureMessages);
           if (!passage) return;
-          try {
-            const out = await client.remember({ text: passage });
-            const kept = (out.remembered ?? []).filter((r) => !r.already_known).length;
-            if (kept > 0 || out.kept_as_text) {
-              log.info(`recall: auto-capture kept ${kept} statement${kept === 1 ? "" : "s"}${out.kept_as_text ? " and the text" : ""}`);
-            }
-          } catch (err) {
-            log.warn(`recall: auto-capture skipped: ${describeError(err)}`);
+          if (queued >= MAX_QUEUED_CAPTURES) {
+            log.warn(`recall: auto-capture skipped: ${queued} captures already waiting for Recall`);
+            return;
           }
+          // OpenClaw stops waiting for agent_end hooks after 30 seconds, and an
+          // extraction model can take longer, so the capture runs after the hook
+          // returns. A process that exits right after one turn, such as
+          // `openclaw agent --local`, may end before it finishes.
+          queued++;
+          captures = captures.then(async () => {
+            try {
+              const out = await client.remember({ text: passage }, undefined, cfg.captureTimeoutMs);
+              const kept = (out.remembered ?? []).filter((r) => !r.already_known).length;
+              if (kept > 0 || out.kept_as_text) {
+                log.info(`recall: auto-capture kept ${kept} statement${kept === 1 ? "" : "s"}${out.kept_as_text ? " and the text" : ""}`);
+              }
+            } catch (err) {
+              log.warn(`recall: auto-capture skipped: ${describeError(err)}`);
+            } finally {
+              queued--;
+            }
+          });
         });
       }
 
