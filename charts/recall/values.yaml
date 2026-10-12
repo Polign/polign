@@ -1,0 +1,99 @@
+# recall serve is stateless: every record lives in the backend. One replica is
+# plenty for most installs; more share the backend and the key store.
+replicaCount: 1
+image:
+  repository: ghcr.io/polign/recall
+  tag: "" # Defaults to Chart.appVersion; never uses latest.
+  digest: "" # Optional sha256 digest takes precedence over tag.
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+backend:
+  # polign (recommended: bucket-native, leases for the resume tools, lexical
+  # search, cached reads) or qdrant (vector search only, no resume tools).
+  kind: polign
+  # Required. The backend's URL from inside the cluster, such as
+  # http://polign.polign.svc:23000 for the polign chart's Service.
+  url: ""
+  # Secret holding the backend's API key. For polign this is a key that reaches
+  # every namespace (unscoped); recall serve scopes callers itself.
+  existingSecret: ""
+  secretKey: api-key
+
+# Collection name prefix. Each Recall namespace gets its own collection under
+# it, and keys live in <collection>__keys.
+collection: recall_lexical_v1
+# A predicate registry JSON in a ConfigMap; empty uses the starter registry.
+predicates:
+  existingConfigMap: ""
+  key: predicates.json
+open: false # Let writes define predicates.
+text: false # Serve the text-only tools instead of the typed ones.
+agent: true # Serve the resume tools when the backend has leases.
+# Optional model that works out statements in free text, as provider:model
+# (anthropic:claude-opus-5-5, openai:<model>, ollama:<model>). Put the
+# provider's key in env from a Secret (ANTHROPIC_API_KEY or OPENAI_API_KEY).
+extractModel: ""
+# Optional embedding service; empty uses built-in lexical feature hashing.
+embedURL: ""
+
+auth:
+  # How long a key check is reused. A revoked or expired key is refused within
+  # this time.
+  cacheTTL: 30s
+  # Secret holding one admin key the server registers at startup if the store
+  # does not know it, so keys can be minted over HTTP without a shell. Mint it
+  # anywhere with `recall key create -admin` against the backend, or any
+  # "rcl_<16 hex>_<secret>" you generate; adoption is idempotent and never
+  # rebinds a key already on record.
+  bootstrapKey:
+    existingSecret: ""
+    secretKey: key
+  # Secret holding a static keys file, one "<key> <namespace>" per line, for
+  # installs that want no key store.
+  keysFile:
+    existingSecret: ""
+    secretKey: keys
+
+kubernetes:
+  # Exchange pods' projected service account tokens for short-lived keys at
+  # POST /v1/auth/kubernetes. Turning this on mounts the server's own token
+  # and creates a ClusterRole that may create TokenReviews (and read
+  # ServiceAccounts when tenantLabel is set).
+  enabled: false
+  audience: recall
+  # Label on the caller's ServiceAccount that names the tenant. Empty uses the
+  # ServiceAccount's namespace. Never a label on anything the tenant controls.
+  tenantLabel: ""
+  # Label on the pod that names the agent, for pods a warm pool hands out under
+  # generated names (set it from SandboxClaim.additionalPodMetadata; the
+  # agent-sandbox controller allowlists the label domains a claim may set,
+  # default sandbox.users.io). Empty uses the pod's name. The namespace stays
+  # <tenant>:<agent>, so a tenant can only name its own agents. Turning it on
+  # lets the server read Pods.
+  agentLabel: ""
+  keyTTL: 15m
+  rbac:
+    create: true
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+service:
+  type: ClusterIP
+  port: 8080
+podLabels: {}
+podAnnotations: {}
+env: [] # Kubernetes EnvVar entries; use valueFrom.secretKeyRef for credentials.
+envFrom: [] # Existing Secret / ConfigMap references.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+nodeSelector: {}
+tolerations: []
+affinity: {}

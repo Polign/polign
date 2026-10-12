@@ -1,7 +1,10 @@
+# One workflow for every chart in charts/. The tag names the chart:
+# polign-chart-vX.Y.Z releases charts/polign, recall-chart-vX.Y.Z releases
+# charts/recall. Each chart is published to oci://ghcr.io/polign/charts/<chart>.
 name: chart-release
 on:
   push:
-    tags: ['polign-chart-v*']
+    tags: ['polign-chart-v*', 'recall-chart-v*']
 permissions:
   contents: read
 jobs:
@@ -21,17 +24,36 @@ jobs:
       - run: bash scripts/kubernetes-tools.sh "$RUNNER_TEMP/tools"
       - run: echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
       - run: python -m pip install PyYAML
-      - name: Validate version and available server image
+      - name: Pick the chart the tag names
+        run: |
+          case "$GITHUB_REF_NAME" in
+            polign-chart-v*)
+              echo "CHART=polign" >> "$GITHUB_ENV"
+              echo "CHART_VERSION=${GITHUB_REF_NAME#polign-chart-v}" >> "$GITHUB_ENV"
+              echo "IMAGE=ghcr.io/polign/polign-server" >> "$GITHUB_ENV"
+              echo "TITLE=Polign Helm chart" >> "$GITHUB_ENV"
+              echo "LINT_ARGS=--set store.uri=s3://test-bucket/polign" >> "$GITHUB_ENV"
+              echo "CHECKS=tests/kubernetes/chart.py" >> "$GITHUB_ENV" ;;
+            recall-chart-v*)
+              echo "CHART=recall" >> "$GITHUB_ENV"
+              echo "CHART_VERSION=${GITHUB_REF_NAME#recall-chart-v}" >> "$GITHUB_ENV"
+              echo "IMAGE=ghcr.io/polign/recall" >> "$GITHUB_ENV"
+              echo "TITLE=Recall Helm chart" >> "$GITHUB_ENV"
+              echo "LINT_ARGS=--set backend.url=http://polign.polign.svc:23000 --set auth.bootstrapKey.existingSecret=recall-admin" >> "$GITHUB_ENV"
+              echo "CHECKS=tests/kubernetes/recall_chart.py" >> "$GITHUB_ENV" ;;
+            *) echo "::error::unknown chart tag $GITHUB_REF_NAME"; exit 1 ;;
+          esac
+      - name: Validate version and available image
         run: |
           python - <<'PY'
           import os, subprocess, yaml
-          chart=yaml.safe_load(open('charts/polign/Chart.yaml'))
-          if os.environ['GITHUB_REF_NAME']!='polign-chart-v'+chart['version']:
+          chart=yaml.safe_load(open(f"charts/{os.environ['CHART']}/Chart.yaml"))
+          if chart['version']!=os.environ['CHART_VERSION']:
               raise SystemExit('chart version does not match the release tag')
-          subprocess.run(['docker','manifest','inspect','ghcr.io/polign/polign-server:'+chart['appVersion']],check=True,stdout=subprocess.DEVNULL)
+          subprocess.run(['docker','manifest','inspect',os.environ['IMAGE']+':'+chart['appVersion']],check=True,stdout=subprocess.DEVNULL)
           PY
-          helm lint charts/polign --set store.uri=s3://test-bucket/polign
-          python tests/kubernetes/chart.py
+          helm lint "charts/$CHART" $LINT_ARGS
+          python "$CHECKS"
       # cosign and oras read the Docker credential store, which
       # `helm registry login` does not write to. Without this they fail at the
       # point of pushing, after the chart is already published.
@@ -45,10 +67,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${GITHUB_REF_NAME#polign-chart-v}"
-          helm package charts/polign --destination "$RUNNER_TEMP"
+          version="$CHART_VERSION"
+          helm package "charts/$CHART" --destination "$RUNNER_TEMP"
           printf '%s' "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          helm push "$RUNNER_TEMP/polign-$version.tgz" oci://ghcr.io/polign/charts 2>&1 | tee "$RUNNER_TEMP/push.log"
+          helm push "$RUNNER_TEMP/$CHART-$version.tgz" oci://ghcr.io/polign/charts 2>&1 | tee "$RUNNER_TEMP/push.log"
           # Sign and verify by digest, never by tag: a tag can be moved later.
           digest=$(sed -n 's/^Digest: *//p' "$RUNNER_TEMP/push.log" | tr -d '[:space:]')
           case "$digest" in
@@ -59,13 +81,13 @@ jobs:
           # Idempotent, so re-running this tag after a later step fails does not
           # stop at an already-created release.
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/polign-$version.tgz" --clobber
+            gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/$CHART-$version.tgz" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/polign-$version.tgz" \
-              --title "Polign Helm chart $version" --notes-file charts/polign/CHANGELOG.md --latest=false
+            gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/$CHART-$version.tgz" \
+              --title "$TITLE $version" --notes-file "charts/$CHART/CHANGELOG.md" --latest=false
           fi
       - name: Sign the chart
-        run: cosign sign --yes "ghcr.io/polign/charts/polign@${{ steps.publish.outputs.digest }}"
+        run: cosign sign --yes "ghcr.io/polign/charts/$CHART@${{ steps.publish.outputs.digest }}"
       - name: Publish Artifact Hub repository metadata
         env:
           GH_TOKEN: ${{ github.token }}
@@ -74,15 +96,15 @@ jobs:
           # confirm who owns the repository. Pushed from the file's own
           # directory so the layer title is the bare filename it expects.
           cd charts
-          oras push "ghcr.io/polign/charts/polign:artifacthub.io" \
+          oras push "ghcr.io/polign/charts/$CHART:artifacthub.io" \
             --config /dev/null:application/vnd.cncf.artifacthub.config.v1+yaml \
             artifacthub-repo.yml:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml
       - name: Verify anonymous download and signature
         run: |
-          version="${GITHUB_REF_NAME#polign-chart-v}"
+          version="$CHART_VERSION"
           mkdir -p "$RUNNER_TEMP/verify"
-          HELM_REGISTRY_CONFIG="$RUNNER_TEMP/anonymous.json" helm pull oci://ghcr.io/polign/charts/polign \
+          HELM_REGISTRY_CONFIG="$RUNNER_TEMP/anonymous.json" helm pull "oci://ghcr.io/polign/charts/$CHART" \
             --version "$version" --destination "$RUNNER_TEMP/verify"
-          cosign verify "ghcr.io/polign/charts/polign@${{ steps.publish.outputs.digest }}" \
+          cosign verify "ghcr.io/polign/charts/$CHART@${{ steps.publish.outputs.digest }}" \
             --certificate-identity-regexp '^https://github\.com/Polign/polign/\.github/workflows/chart-release\.yml@' \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com

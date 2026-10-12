@@ -19,8 +19,11 @@ jobs:
       - run: echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
       - run: python -m pip install PyYAML
       - run: helm lint charts/polign --set store.uri=s3://test-bucket/polign
+      - run: helm lint charts/recall --set backend.url=http://polign.polign.svc:23000 --set auth.bootstrapKey.existingSecret=recall-admin
       # The release job pushes this to the registry. A typo here would fail
       # after the chart is already published, so check it on the pull request.
       - run: python -c "import yaml,sys; d=yaml.safe_load(open('charts/artifacthub-repo.yml')); sys.exit('artifacthub-repo.yml needs an owners list' if not d.get('owners') else 0)"
       - run: python tests/kubernetes/chart.py
+      - run: python tests/kubernetes/recall_chart.py
       - run: helm package charts/polign --destination "$RUNNER_TEMP"
+      - run: helm package charts/recall --destination "$RUNNER_TEMP"
