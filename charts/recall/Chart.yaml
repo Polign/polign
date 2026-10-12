@@ -1,0 +1,31 @@
+apiVersion: v2
+name: recall
+description: Recall agent memory server (recall serve) on the vector store you already run
+type: application
+version: 0.1.0
+appVersion: "0.16.0"
+kubeVersion: ">=1.30.0-0"
+home: https://polign.com/recall
+icon: https://polign.com/assets/favicon.svg
+sources:
+  - https://github.com/Polign/recall
+keywords: [recall, agent-memory, mcp, polign]
+maintainers:
+  - name: Polign
+    url: https://github.com/Polign
+annotations:
+  org.opencontainers.image.source: https://github.com/Polign/recall
+  artifacthub.io/category: ai-machine-learning
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/prerelease: "true"
+  artifacthub.io/images: |
+    - name: recall
+      image: ghcr.io/polign/recall:0.16.0
+  artifacthub.io/links: |
+    - name: Chart documentation
+      url: https://github.com/Polign/polign/blob/main/charts/recall/README.md
+    - name: Memory API
+      url: https://github.com/Polign/recall/blob/main/docs/memory-api-v1.md
+  artifacthub.io/changes: |
+    - kind: added
+      description: First chart. recall serve with a polign_db or Qdrant backend, stored keys, an optional bootstrap admin key, and Kubernetes workload token exchange with the RBAC it needs.

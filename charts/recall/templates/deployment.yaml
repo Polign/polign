@@ -1,0 +1,165 @@
+{{- if not .Values.backend.url -}}
+{{- fail "Set backend.url to the vector store recall serve should use, such as http://polign.polign.svc:23000" -}}
+{{- end -}}
+{{- if not (has .Values.backend.kind (list "polign" "qdrant")) -}}
+{{- fail "backend.kind must be polign or qdrant" -}}
+{{- end -}}
+{{- if and (not .Values.auth.bootstrapKey.existingSecret) (not .Values.auth.keysFile.existingSecret) (not .Values.kubernetes.enabled) -}}
+{{- fail "Nobody could call this server: set auth.bootstrapKey.existingSecret (an admin key that mints keys over HTTP), auth.keysFile.existingSecret (static keys), or kubernetes.enabled=true (workload token exchange)" -}}
+{{- end -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "recall.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "recall.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- include "recall.selector" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "recall.serviceAccount" . }}
+      automountServiceAccountToken: {{ .Values.kubernetes.enabled }}
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: recall
+          image: {{ include "recall.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - -backend={{ .Values.backend.kind }}
+            - -url={{ .Values.backend.url }}
+            - serve
+            - -listen=:8080
+            - -collection={{ .Values.collection }}
+            - -auth-cache-ttl={{ .Values.auth.cacheTTL }}
+            - -agent={{ .Values.agent }}
+            {{- if .Values.open }}
+            - -open
+            {{- end }}
+            {{- if .Values.text }}
+            - -text
+            {{- end }}
+            {{- if .Values.predicates.existingConfigMap }}
+            - -predicates=/predicates/{{ .Values.predicates.key }}
+            {{- end }}
+            {{- if .Values.extractModel }}
+            - -extract-model={{ .Values.extractModel }}
+            {{- end }}
+            {{- if .Values.embedURL }}
+            - -embed-url={{ .Values.embedURL }}
+            {{- end }}
+            {{- if .Values.auth.bootstrapKey.existingSecret }}
+            - -bootstrap-key-file=/auth/{{ .Values.auth.bootstrapKey.secretKey }}
+            {{- end }}
+            {{- if .Values.auth.keysFile.existingSecret }}
+            - -keys-file=/keys/{{ .Values.auth.keysFile.secretKey }}
+            {{- end }}
+            {{- if .Values.kubernetes.enabled }}
+            - -kubernetes
+            - -kubernetes-audience={{ .Values.kubernetes.audience }}
+            - -kubernetes-key-ttl={{ .Values.kubernetes.keyTTL }}
+            {{- if .Values.kubernetes.tenantLabel }}
+            - -kubernetes-tenant-label={{ .Values.kubernetes.tenantLabel }}
+            {{- end }}
+            {{- end }}
+          ports:
+            - {name: http, containerPort: 8080}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          env:
+            {{- if .Values.backend.existingSecret }}
+            - name: {{ include "recall.keyEnv" . }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.backend.existingSecret }}
+                  key: {{ .Values.backend.secretKey }}
+            {{- end }}
+            {{- with .Values.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 5
+            failureThreshold: 2
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 2
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            {{- if .Values.auth.bootstrapKey.existingSecret }}
+            - {name: bootstrap-key, mountPath: /auth, readOnly: true}
+            {{- end }}
+            {{- if .Values.auth.keysFile.existingSecret }}
+            - {name: keys-file, mountPath: /keys, readOnly: true}
+            {{- end }}
+            {{- if .Values.predicates.existingConfigMap }}
+            - {name: predicates, mountPath: /predicates, readOnly: true}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        {{- if .Values.auth.bootstrapKey.existingSecret }}
+        - name: bootstrap-key
+          secret:
+            secretName: {{ .Values.auth.bootstrapKey.existingSecret }}
+            defaultMode: 0400
+        {{- end }}
+        {{- if .Values.auth.keysFile.existingSecret }}
+        - name: keys-file
+          secret:
+            secretName: {{ .Values.auth.keysFile.existingSecret }}
+            defaultMode: 0400
+        {{- end }}
+        {{- if .Values.predicates.existingConfigMap }}
+        - name: predicates
+          configMap:
+            name: {{ .Values.predicates.existingConfigMap }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,21 @@
+recall serve is at http://{{ .Release.Name }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}
+on a {{ .Values.backend.kind }} backend at {{ .Values.backend.url }}.
+{{- if .Values.auth.bootstrapKey.existingSecret }}
+
+Mint a key for a namespace with the admin key from Secret {{ .Values.auth.bootstrapKey.existingSecret }}:
+
+  ADMIN=$(kubectl -n {{ .Release.Namespace }} get secret {{ .Values.auth.bootstrapKey.existingSecret }} -o jsonpath='{.data.{{ .Values.auth.bootstrapKey.secretKey }}}' | base64 -d)
+  kubectl -n {{ .Release.Namespace }} run -it --rm mint --image=curlimages/curl --restart=Never -- \
+    curl -sS -H "Authorization: Bearer $ADMIN" -H 'Content-Type: application/json' \
+    -d '{"namespace":"acme","note":"first key"}' http://{{ .Release.Name }}:{{ .Values.service.port }}/v1/keys
+{{- end }}
+{{- if .Values.kubernetes.enabled }}
+
+Workload token exchange is on. A pod with a projected service account token
+(audience {{ .Values.kubernetes.audience }}) gets a key for
+<{{ if .Values.kubernetes.tenantLabel }}{{ .Values.kubernetes.tenantLabel }}{{ else }}its namespace{{ end }}>:<its pod name>
+by running `recall connect` with RECALL_URL set, or POSTing the token to /v1/auth/kubernetes.
+{{- end }}
+
+Agents connect over MCP (streamable HTTP) at /mcp, or over stdio with
+`recall connect`; see https://github.com/Polign/recall/blob/main/docs/memory-api-v1.md
