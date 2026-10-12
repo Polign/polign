@@ -20,3 +20,4 @@ python/recall-langgraph/bench/results/
 
 # The OpenClaw plugin (plugins/openclaw) installs its dependencies here
 node_modules/
+plugins/openclaw/dist/

@@ -19,6 +19,7 @@
     "long-term-memory"
   ],
   "files": [
+    "dist/",
     "index.ts",
     "src/",
     "openclaw.plugin.json",
@@ -26,6 +27,8 @@
     "README.md"
   ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build",
     "test": "node --test test/",
     "check": "tsc --noEmit -p tsconfig.json"
   },
@@ -45,7 +48,7 @@
   },
   "openclaw": {
     "extensions": [
-      "./index.ts"
+      "./dist/index.js"
     ],
     "compat": {
       "pluginApi": ">=2026.10.2",

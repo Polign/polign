@@ -84,10 +84,12 @@ openclaw recall remember "I moved to Bellevue and I prefer concise answers"
 openclaw recall search "where does the user live?"
 ```
 
-To try the plugin from a checkout instead of npm, point OpenClaw at the folder:
+To try the plugin from a checkout instead of npm, build it and point OpenClaw
+at the folder:
 
 ```sh
-openclaw plugins install --link --force --accept-capabilities /path/to/polign/plugins/openclaw
+cd /path/to/polign/plugins/openclaw && npm install && npm run build
+openclaw plugins install --link --force --accept-capabilities "$PWD"
 openclaw plugins inspect recall --runtime
 ```
 
@@ -139,12 +141,13 @@ for the first two.
 npm install
 npm test          # node --test, no network
 npm run check     # tsc against the OpenClaw plugin SDK
+npm run build     # dist/, the compiled entry OpenClaw loads from npm
 ```
 
-The plugin is plain TypeScript that OpenClaw loads directly; there is no build
-step. `openclaw plugins validate` applies to plugins written with
-`defineToolPlugin`, not to this one; use `openclaw plugins inspect recall
---runtime` to see what it registered.
+From a checkout OpenClaw loads the TypeScript source directly; from npm it
+loads `dist/index.js`, which `npm publish` builds first. `openclaw plugins
+validate` applies to plugins written with `defineToolPlugin`, not to this one;
+use `openclaw plugins inspect recall --runtime` to see what it registered.
 
 ## Source and license
 

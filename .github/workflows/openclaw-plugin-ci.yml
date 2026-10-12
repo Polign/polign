@@ -33,5 +33,7 @@ jobs:
         run: npm test
       - name: Type check against the OpenClaw SDK
         run: npm run check
+      - name: Build the compiled entry OpenClaw loads from npm
+        run: npm run build
       - name: Package contents
         run: npm pack --dry-run
