@@ -1,0 +1,100 @@
+{
+  "id": "recall",
+  "kind": "memory",
+  "categories": [
+    "memory"
+  ],
+  "name": "Memory (Recall)",
+  "description": "Long-term memory kept in Recall by Polign. A new statement replaces the old one and the old one stays in the history, so the agent sees corrections and can read memory as of any earlier time.",
+  "version": "0.1.0",
+  "activation": {
+    "onStartup": true
+  },
+  "contracts": {
+    "tools": [
+      "memory_forget",
+      "memory_search",
+      "memory_store"
+    ]
+  },
+  "toolMetadata": {
+    "memory_search": {
+      "replaySafe": true
+    }
+  },
+  "cliCommands": [
+    {
+      "name": "recall",
+      "description": "Search, remember, forget, and check the Recall memory server",
+      "hasSubcommands": true
+    }
+  ],
+  "uiHints": {
+    "url": {
+      "label": "Recall server URL",
+      "placeholder": "http://127.0.0.1:8080",
+      "help": "Where `recall serve` listens. Defaults to $RECALL_URL, then http://127.0.0.1:8080."
+    },
+    "apiKey": {
+      "label": "Recall key",
+      "sensitive": true,
+      "placeholder": "rcl_...",
+      "help": "A key minted with `recall key create`. Defaults to $RECALL_API_KEY. The key chooses the namespace the memories live in."
+    },
+    "autoRecall": {
+      "label": "Auto-recall",
+      "help": "Before each turn, ask Recall what bears on the message and put it in front of the prompt."
+    },
+    "autoCapture": {
+      "label": "Auto-capture",
+      "help": "After each turn, send the recent conversation to Recall so it can work out what to keep."
+    },
+    "maxMemories": {
+      "label": "Memories per turn",
+      "placeholder": "5",
+      "help": "How many remembered statements auto-recall puts in front of the prompt."
+    },
+    "captureMessages": {
+      "label": "Messages to capture",
+      "placeholder": "10",
+      "advanced": true,
+      "help": "How many of the latest messages auto-capture sends after a turn."
+    },
+    "timeoutMs": {
+      "label": "Request timeout (ms)",
+      "placeholder": "10000",
+      "advanced": true
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "url": {
+        "type": "string"
+      },
+      "apiKey": {
+        "type": "string"
+      },
+      "autoRecall": {
+        "type": "boolean"
+      },
+      "autoCapture": {
+        "type": "boolean"
+      },
+      "maxMemories": {
+        "type": "number",
+        "minimum": 1
+      },
+      "captureMessages": {
+        "type": "number",
+        "minimum": 1
+      },
+      "timeoutMs": {
+        "type": "number",
+        "minimum": 100
+      }
+    },
+    "required": []
+  }
+}
