@@ -66,9 +66,11 @@ kubernetes:
   # ServiceAccount's namespace. Never a label on anything the tenant controls.
   tenantLabel: ""
   # Label on the pod that names the agent, for pods a warm pool hands out under
-  # generated names (set it from SandboxClaim.additionalPodMetadata). Empty
-  # uses the pod's name. The namespace stays <tenant>:<agent>, so a tenant can
-  # only name its own agents. Turning it on lets the server read Pods.
+  # generated names (set it from SandboxClaim.additionalPodMetadata; the
+  # agent-sandbox controller allowlists the label domains a claim may set,
+  # default sandbox.users.io). Empty uses the pod's name. The namespace stays
+  # <tenant>:<agent>, so a tenant can only name its own agents. Turning it on
+  # lets the server read Pods.
   agentLabel: ""
   keyTTL: 15m
   rbac:
