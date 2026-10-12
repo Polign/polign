@@ -1,0 +1,39 @@
+name: openclaw-plugin
+
+on:
+  push:
+    branches: [main]
+    paths: ["plugins/openclaw/**", ".github/workflows/openclaw-plugin-ci.yml"]
+  pull_request:
+    paths: ["plugins/openclaw/**", ".github/workflows/openclaw-plugin-ci.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["24", "26"]
+    defaults:
+      run:
+        working-directory: plugins/openclaw
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: plugins/openclaw/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Unit tests
+        run: npm test
+      - name: Type check against the OpenClaw SDK
+        run: npm run check
+      - name: Build the compiled entry OpenClaw loads from npm
+        run: npm run build
+      - name: Package contents
+        run: npm pack --dry-run

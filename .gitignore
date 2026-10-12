@@ -17,3 +17,7 @@ python/recall-langgraph/bench/results/
 
 # macOS Finder metadata
 .DS_Store
+
+# The OpenClaw plugin (plugins/openclaw) installs its dependencies here
+node_modules/
+plugins/openclaw/dist/
