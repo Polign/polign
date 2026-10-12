@@ -68,7 +68,7 @@ export function createPlugin(deps: { client?: RecallClient; config?: RecallPlugi
       return captures;
     },
     id: PLUGIN_ID,
-    name: "Memory (Recall)",
+    name: "Recall by Polign",
     description:
       "Long-term memory kept in Recall by Polign: a new statement replaces the old one, the old one stays in the history, and memory can be read as of any earlier time.",
     register(api: OpenClawPluginApi) {
