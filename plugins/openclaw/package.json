@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Polign/polign",
+    "url": "git+https://github.com/Polign/polign.git",
     "directory": "plugins/openclaw"
   },
   "homepage": "https://polign.com/openclaw",
