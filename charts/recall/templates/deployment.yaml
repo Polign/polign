@@ -84,6 +84,9 @@ spec:
             {{- if .Values.kubernetes.tenantLabel }}
             - -kubernetes-tenant-label={{ .Values.kubernetes.tenantLabel }}
             {{- end }}
+            {{- if .Values.kubernetes.agentLabel }}
+            - -kubernetes-agent-label={{ .Values.kubernetes.agentLabel }}
+            {{- end }}
             {{- end }}
           ports:
             - {name: http, containerPort: 8080}

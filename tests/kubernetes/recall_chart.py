@@ -64,6 +64,12 @@ rules = by_kind(docs, 'ClusterRole')[0]['rules']
 assert {'apiGroups': [''], 'resources': ['serviceaccounts'], 'verbs': ['get']} in rules
 assert '-kubernetes-tenant-label=recall.polign.com/tenant' in by_kind(docs, 'Deployment')[0]['spec']['template']['spec']['containers'][0]['args']
 
+docs = render({'backend': BACKEND, 'kubernetes': {'enabled': True, 'agentLabel': 'recall.polign.com/agent'}})
+rules = by_kind(docs, 'ClusterRole')[0]['rules']
+assert {'apiGroups': [''], 'resources': ['pods'], 'verbs': ['get']} in rules
+assert not any(r['resources'] == ['serviceaccounts'] for r in rules)
+assert '-kubernetes-agent-label=recall.polign.com/agent' in by_kind(docs, 'Deployment')[0]['spec']['template']['spec']['containers'][0]['args']
+
 # Qdrant: the driver's own key variable, and the resume tools can still be
 # asked for (the server declines them at start when there are no leases).
 docs = render({'backend': {'kind': 'qdrant', 'url': 'http://qdrant:6333', 'existingSecret': 'qk'}, 'auth': {'keysFile': {'existingSecret': 'keys'}}})
