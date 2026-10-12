@@ -1,6 +1,6 @@
 {
   "name": "@polign/openclaw-recall",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "description": "Long-term memory for OpenClaw agents, kept in Recall by Polign: corrections replace, history stays, reads as of any time.",
   "license": "Apache-2.0",
@@ -11,12 +11,13 @@
   },
   "homepage": "https://polign.com/openclaw",
   "keywords": [
+    "long-term-memory",
+    "memory",
+    "memory-slot",
     "openclaw",
     "plugin",
-    "memory",
-    "recall",
     "polign",
-    "long-term-memory"
+    "recall"
   ],
   "files": [
     "dist/",
@@ -53,6 +54,10 @@
     "compat": {
       "pluginApi": ">=2026.10.2",
       "minGatewayVersion": "2026.10.2"
+    },
+    "build": {
+      "openclawVersion": "2026.10.2",
+      "pluginSdkVersion": "2026.10.2"
     }
   }
 }
