@@ -29,7 +29,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "prepublishOnly": "npm run build",
-    "test": "node --test test/",
+    "test": "node --test \"test/*.test.ts\"",
     "check": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
