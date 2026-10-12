@@ -6,7 +6,7 @@
   ],
   "name": "Memory (Recall)",
   "description": "Long-term memory kept in Recall by Polign. A new statement replaces the old one and the old one stays in the history, so the agent sees corrections and can read memory as of any earlier time.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "activation": {
     "onStartup": true
   },
@@ -61,9 +61,16 @@
       "help": "How many of the latest messages auto-capture sends after a turn."
     },
     "timeoutMs": {
-      "label": "Request timeout (ms)",
-      "placeholder": "10000",
-      "advanced": true
+      "label": "Tool timeout (ms)",
+      "placeholder": "60000",
+      "advanced": true,
+      "help": "How long the agent's memory tools wait for Recall. Storing waits for the extraction model."
+    },
+    "captureTimeoutMs": {
+      "label": "Capture timeout (ms)",
+      "placeholder": "120000",
+      "advanced": true,
+      "help": "How long one auto-capture waits for Recall. Captures run in the background after the turn."
     }
   },
   "configSchema": {
@@ -91,6 +98,10 @@
         "minimum": 1
       },
       "timeoutMs": {
+        "type": "number",
+        "minimum": 100
+      },
+      "captureTimeoutMs": {
         "type": "number",
         "minimum": 100
       }

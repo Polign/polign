@@ -36,16 +36,18 @@ function fakeApi(config: Record<string, unknown>) {
 /** A client whose answers are scripted and whose calls are recorded. */
 function scriptedClient(script: { recall?: RecallResult; remember?: RememberResult; forget?: ForgetResult; fail?: Error }) {
   const calls: Array<{ verb: string; args: unknown }> = [];
+  const timeouts: Array<{ verb: string; timeoutMs: number | undefined }> = [];
   const client = new RecallClient({ url: "http://unused", apiKey: "k" });
-  const answer = <T>(verb: string, args: unknown, value: T | undefined): Promise<T> => {
+  const answer = <T>(verb: string, args: unknown, timeoutMs: number | undefined, value: T | undefined): Promise<T> => {
     calls.push({ verb, args });
+    timeouts.push({ verb, timeoutMs });
     if (script.fail) return Promise.reject(script.fail);
     return Promise.resolve(value as T);
   };
-  client.recall = (args) => answer("recall", args, script.recall);
-  client.remember = (args) => answer("remember", args, script.remember);
-  client.forget = (args) => answer("forget", args, script.forget);
-  return { client, calls };
+  client.recall = (args, _signal, timeoutMs) => answer("recall", args, timeoutMs, script.recall);
+  client.remember = (args, _signal, timeoutMs) => answer("remember", args, timeoutMs, script.remember);
+  client.forget = (args, _signal, timeoutMs) => answer("forget", args, timeoutMs, script.forget);
+  return { client, calls, timeouts };
 }
 
 const config = resolveConfig({ apiKey: "k", maxMemories: 2, captureMessages: 4 }, {});
@@ -146,6 +148,44 @@ test("before_prompt_build puts at most maxMemories in front of the prompt", asyn
   assert.deepEqual(calls, [{ verb: "recall", args: { question: "What is my editor?" } }]);
 });
 
+test("auto-recall gives up before OpenClaw's 15 second hook limit; tools use the longer timeout", async () => {
+  const { api, hooks, tools } = fakeApi({});
+  const { client, timeouts } = scriptedClient({ recall: { memories: [] } });
+  createPlugin({ client, config }).register(api as never);
+  await hooks.get("before_prompt_build")!({ prompt: "What is my editor?", messages: [] }, {});
+  await tools.get("memory_search")!.execute("1", { question: "editor?" });
+  assert.deepEqual(timeouts, [
+    { verb: "recall", timeoutMs: 10_000 },
+    { verb: "recall", timeoutMs: undefined },
+  ]);
+});
+
+test("agent_end returns before the capture finishes, and captures run one at a time", async () => {
+  const { api, hooks } = fakeApi({});
+  const client = new RecallClient({ url: "http://unused", apiKey: "k" });
+  const order: string[] = [];
+  let release: () => void = () => {};
+  const gate = new Promise<void>((r) => (release = r));
+  let n = 0;
+  client.remember = async () => {
+    const id = ++n;
+    order.push(`start ${id}`);
+    if (id === 1) await gate;
+    order.push(`end ${id}`);
+    return {};
+  };
+  const plugin = createPlugin({ client, config });
+  plugin.register(api as never);
+  const hook = hooks.get("agent_end")!;
+  await hook({ success: true, messages: [{ role: "user", content: "first" }] }, {});
+  await hook({ success: true, messages: [{ role: "user", content: "second" }] }, {});
+  await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual(order, ["start 1"], "the hooks returned while the first capture was still waiting");
+  release();
+  await plugin.idle();
+  assert.deepEqual(order, ["start 1", "end 1", "start 2", "end 2"]);
+});
+
 test("before_prompt_build prefers the current user message, skips short prompts and empty answers", async () => {
   const { api, hooks } = fakeApi({});
   const { client, calls } = scriptedClient({ recall: { memories: [] } });
@@ -166,8 +206,9 @@ test("before_prompt_build logs and adds nothing when Recall is down", async () =
 
 test("agent_end sends the latest turns as one passage and strips injected memories", async () => {
   const { api, hooks } = fakeApi({});
-  const { client, calls } = scriptedClient({ remember: { remembered: [{ text: "Anup prefers vim." }] } });
-  createPlugin({ client, config }).register(api as never);
+  const { client, calls, timeouts } = scriptedClient({ remember: { remembered: [{ text: "Anup prefers vim." }] } });
+  const plugin = createPlugin({ client, config });
+  plugin.register(api as never);
   await hooks.get("agent_end")!(
     {
       success: true,
@@ -180,23 +221,29 @@ test("agent_end sends the latest turns as one passage and strips injected memori
     },
     {},
   );
+  await plugin.idle();
   assert.deepEqual(calls, [{ verb: "remember", args: { text: "User: very old\n\nAssistant: old reply\n\nUser: I prefer vim now.\n\nAssistant: Noted, vim it is." } }]);
+  assert.deepEqual(timeouts, [{ verb: "remember", timeoutMs: 120_000 }]);
 });
 
 test("agent_end does nothing for failed runs, empty runs, or runs without user text", async () => {
   const { api, hooks } = fakeApi({});
   const { client, calls } = scriptedClient({ remember: {} });
-  createPlugin({ client, config }).register(api as never);
+  const plugin = createPlugin({ client, config });
+  plugin.register(api as never);
   const hook = hooks.get("agent_end")!;
   await hook({ success: false, messages: [{ role: "user", content: "x" }] }, {});
   await hook({ success: true, messages: [] }, {});
   await hook({ success: true, messages: [{ role: "assistant", content: "only me" }] }, {});
+  await plugin.idle();
   assert.equal(calls.length, 0);
 });
 
 test("agent_end logs and swallows a Recall failure", async () => {
   const { api, hooks, logs } = fakeApi({});
-  createPlugin({ client: scriptedClient({ fail: new Error("boom") }).client, config }).register(api as never);
+  const plugin = createPlugin({ client: scriptedClient({ fail: new Error("boom") }).client, config });
+  plugin.register(api as never);
   await hooks.get("agent_end")!({ success: true, messages: [{ role: "user", content: "I prefer vim." }] }, {});
+  await plugin.idle();
   assert.ok(logs.some((l) => l.includes("auto-capture skipped: boom")));
 });

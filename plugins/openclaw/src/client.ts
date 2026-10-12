@@ -71,16 +71,16 @@ export class RecallClient {
     this.fetchImpl = opts.fetch ?? fetch;
   }
 
-  recall(args: { question: string; as_of?: string }, signal?: AbortSignal): Promise<RecallResult> {
-    return this.post<RecallResult>("recall", args, signal);
+  recall(args: { question: string; as_of?: string }, signal?: AbortSignal, timeoutMs?: number): Promise<RecallResult> {
+    return this.post<RecallResult>("recall", args, signal, timeoutMs);
   }
 
-  remember(args: { text: string; observed_at?: string }, signal?: AbortSignal): Promise<RememberResult> {
-    return this.post<RememberResult>("remember", args, signal);
+  remember(args: { text: string; observed_at?: string }, signal?: AbortSignal, timeoutMs?: number): Promise<RememberResult> {
+    return this.post<RememberResult>("remember", args, signal, timeoutMs);
   }
 
-  forget(args: { text: string }, signal?: AbortSignal): Promise<ForgetResult> {
-    return this.post<ForgetResult>("forget", args, signal);
+  forget(args: { text: string }, signal?: AbortSignal, timeoutMs?: number): Promise<ForgetResult> {
+    return this.post<ForgetResult>("forget", args, signal, timeoutMs);
   }
 
   /** True when the server answers GET /healthz. No credential is needed. */
@@ -93,12 +93,12 @@ export class RecallClient {
     }
   }
 
-  private signal(outer?: AbortSignal): AbortSignal {
-    const timeout = AbortSignal.timeout(this.timeoutMs);
+  private signal(outer?: AbortSignal, timeoutMs?: number): AbortSignal {
+    const timeout = AbortSignal.timeout(timeoutMs ?? this.timeoutMs);
     return outer ? AbortSignal.any([outer, timeout]) : timeout;
   }
 
-  private async post<T>(verb: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  private async post<T>(verb: string, body: unknown, signal?: AbortSignal, timeoutMs?: number): Promise<T> {
     if (!this.apiKey) {
       throw new RecallError("unauthenticated", "no Recall key: set apiKey in the plugin config or RECALL_API_KEY");
     }
@@ -111,7 +111,7 @@ export class RecallClient {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body ?? {}),
-        signal: this.signal(signal),
+        signal: this.signal(signal, timeoutMs),
       });
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);

@@ -10,7 +10,8 @@ test("defaults apply when nothing is configured", () => {
   assert.equal(cfg.autoCapture, true);
   assert.equal(cfg.maxMemories, 5);
   assert.equal(cfg.captureMessages, 10);
-  assert.equal(cfg.timeoutMs, 10_000);
+  assert.equal(cfg.timeoutMs, 60_000);
+  assert.equal(cfg.captureTimeoutMs, 120_000);
 });
 
 test("plugin config wins over the environment, which wins over the defaults", () => {
@@ -22,5 +23,5 @@ test("plugin config wins over the environment, which wins over the defaults", ()
   assert.equal(cfg.apiKey, "rcl_cfg");
   assert.equal(cfg.autoRecall, false);
   assert.equal(cfg.maxMemories, 2);
-  assert.equal(cfg.timeoutMs, 10_000, "a timeout under the minimum falls back");
+  assert.equal(cfg.timeoutMs, 60_000, "a timeout under the minimum falls back");
 });
