@@ -6,7 +6,7 @@
   ],
   "name": "Memory (Recall)",
   "description": "Long-term memory kept in Recall by Polign. A new statement replaces the old one and the old one stays in the history, so the agent sees corrections and can read memory as of any earlier time.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "activation": {
     "onStartup": true
   },
