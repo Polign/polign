@@ -52,12 +52,14 @@ key in `POLIGN_API_KEY`; see [Run polign_db](https://polign.com/developers).
 ## Install the plugin
 
 ```sh
-openclaw plugins install @polign/openclaw-recall
+openclaw plugins install clawhub:@polign/openclaw-recall
 ```
 
-OpenClaw asks you to confirm, because the package is not yet traced to a
-signed build. In a script, add `--force --accept-capabilities`. The
-[local example](../../examples/openclaw) does all of the steps below for you.
+It is listed on ClawHub as Recall by Polign, so `openclaw plugins search
+polign` finds it too. The same package is on npm as `@polign/openclaw-recall`;
+installing from there asks you to confirm, and a script needs
+`--force --accept-capabilities`. The [local example](../../examples/openclaw)
+does all of the steps below for you.
 
 Then in `openclaw.json`:
 

@@ -85,10 +85,7 @@ fi
 
 oc() { openclaw "$@" 2>&1 | grep -v "can't verify where this plugin came from\|recall: memory at http" || true; }
 if ! openclaw plugins inspect recall >/dev/null 2>&1; then
-  # --force: OpenClaw cancels an unattended install of a package it cannot
-  # trace to a signed build. Review the package at
-  # https://www.npmjs.com/package/@polign/openclaw-recall first.
-  oc plugins install --force --accept-capabilities @polign/openclaw-recall | tail -1
+  oc plugins install --accept-capabilities clawhub:@polign/openclaw-recall | tail -1
   openclaw plugins inspect recall >/dev/null 2>&1 || { echo "installing @polign/openclaw-recall failed" >&2; exit 1; }
 fi
 oc config set plugins.slots.memory recall | tail -1
