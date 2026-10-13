@@ -7,6 +7,7 @@ name: python-publish
 #   livekit/vX.Y.Z    -> `recall-livekit`                    (python/recall-livekit/)
 #   vapi/vX.Y.Z       -> `recall-vapi`                       (python/recall-vapi/)
 #   langgraph/vX.Y.Z  -> `recall-langgraph`                  (python/recall-langgraph/)
+#   pydanticai/vX.Y.Z -> `recall-pydantic-ai`                (python/recall-pydantic-ai/)
 #   polign_db/vX.Y.Z  -> `polign_db`, the server and CLI binaries as platform
 #                        wheels (python/polign_db/). X.Y.Z is the server release
 #                        being repackaged; X.Y.Z.postN repackages it again.
@@ -19,7 +20,7 @@ name: python-publish
 
 on:
   push:
-    tags: ["python/v*", "langchain/v*", "llamaindex/v*", "livekit/v*", "vapi/v*", "langgraph/v*", "polign_db/v*"]
+    tags: ["python/v*", "langchain/v*", "llamaindex/v*", "livekit/v*", "vapi/v*", "langgraph/v*", "pydanticai/v*", "polign_db/v*"]
 
 permissions:
   contents: read
@@ -66,6 +67,10 @@ jobs:
                           echo "PKG_VERSION=${GITHUB_REF_NAME#langgraph/v}" >> "$GITHUB_ENV"
                           echo "PKG_INIT=" >> "$GITHUB_ENV"
                           echo "PKG_MARKER=recall_langgraph/resume.py" >> "$GITHUB_ENV" ;;
+            pydanticai/v*) echo "PKG_DIR=python/recall-pydantic-ai" >> "$GITHUB_ENV"
+                          echo "PKG_VERSION=${GITHUB_REF_NAME#pydanticai/v}" >> "$GITHUB_ENV"
+                          echo "PKG_INIT=" >> "$GITHUB_ENV"
+                          echo "PKG_MARKER=recall_pydantic_ai/capability.py" >> "$GITHUB_ENV" ;;
             *)            echo "::error::unexpected tag ${GITHUB_REF_NAME}"; exit 1 ;;
           esac
 

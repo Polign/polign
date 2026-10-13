@@ -183,6 +183,35 @@ jobs:
         working-directory: python/recall-langgraph
         run: pytest tests/integration_tests -v
 
+  pydantic-ai:
+    # Recall memory for Pydantic AI agents: unit tests over a fake Recall
+    # client inside real agent runs on the supported range, then the real
+    # `recall` binary and polign-server that pip installs with polign-recall.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        working-directory: python/recall-pydantic-ai
+        run: python -m pip install -e . pytest pytest-asyncio
+      - name: Unit tests
+        working-directory: python/recall-pydantic-ai
+        run: pytest tests/unit_tests -q
+      - name: Unit tests on the oldest supported pydantic-ai
+        working-directory: python/recall-pydantic-ai
+        run: |
+          python -m pip install "pydantic-ai-slim==2.16.0"
+          pytest tests/unit_tests -q
+      - name: Integration tests
+        working-directory: python/recall-pydantic-ai
+        run: pytest tests/integration_tests -v
+
   livekit:
     # Recall memory for LiveKit voice agents: unit tests over a fake Recall
     # subprocess on the supported range, then the real `polign mcp` and server
