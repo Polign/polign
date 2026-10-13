@@ -27,8 +27,9 @@ collection: recall_lexical_v1
 predicates:
   existingConfigMap: ""
   key: predicates.json
-open: false # Let writes define predicates.
-text: false # Serve the text-only tools instead of the typed ones.
+typed: false # Serve the typed tools over the registry instead of the text-only ones.
+open: false # Let writes define predicates; the text-only tools do unless a predicates ConfigMap is given.
+text: false # Accepted for compatibility; the text-only tools are the default.
 agent: true # Serve the resume tools when the backend has leases.
 # Optional model that works out statements in free text, as provider:model
 # (anthropic:claude-opus-5-5, openai:<model>, ollama:<model>). Put the

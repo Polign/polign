@@ -73,7 +73,7 @@ def server(data):
 
 def bridge(tmp_path, url, cli):
     memory = RecallMemory.open(
-        command=[cli, "mcp", "-memory-only", "-write"],
+        command=[cli, "mcp", "-memory-only", "-write", "-typed"],
         timeout=5,
         env={"POLIGN_URL": url, "POLIGN_API_KEY": "", "POLIGN_COLLECTION": "vapi_test"},
     )

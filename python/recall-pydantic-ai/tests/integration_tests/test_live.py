@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(recall_bin() is None, reason="the recall binary 
 def client(tmp_path_factory):
     data = tmp_path_factory.mktemp("recall-data")
     try:
-        with Client(local_dir=data) as c:
+        with Client(local_dir=data, typed=True) as c:
             yield c
     finally:
         # local_dir starts a detached polign-server that outlives the client.

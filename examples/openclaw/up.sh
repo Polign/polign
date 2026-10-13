@@ -56,7 +56,7 @@ fi
 if up "$RECALL_ADDR"; then
   echo "recall serve: already answering on $RECALL_ADDR"
 else
-  nohup recall -url "http://$DB_ADDR" serve -text -listen "$RECALL_ADDR" -extract-model "$EXTRACT_MODEL" \
+  nohup recall -url "http://$DB_ADDR" serve -listen "$RECALL_ADDR" -extract-model "$EXTRACT_MODEL" \
     >"$STATE/recall-serve.log" 2>&1 &
   echo $! >"$STATE/recall-serve.pid"
   wait_up "$RECALL_ADDR" "recall serve" "$STATE/recall-serve.log"

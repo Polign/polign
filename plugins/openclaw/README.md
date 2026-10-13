@@ -38,7 +38,7 @@ The server holds the database; OpenClaw holds only its key.
 
 ```sh
 polign-server -store fs:$HOME/.local/share/polign/openclaw
-recall -url http://127.0.0.1:23000 serve -text -listen 127.0.0.1:8080 \
+recall -url http://127.0.0.1:23000 serve -listen 127.0.0.1:8080 \
   -extract-model anthropic:claude-haiku-4-5-20251001
 recall -url http://127.0.0.1:23000 key create -namespace openclaw -expires 8760h
 ```

@@ -62,6 +62,9 @@ spec:
             {{- if .Values.text }}
             - -text
             {{- end }}
+            {{- if .Values.typed }}
+            - -typed
+            {{- end }}
             {{- if .Values.predicates.existingConfigMap }}
             - -predicates=/predicates/{{ .Values.predicates.key }}
             {{- end }}

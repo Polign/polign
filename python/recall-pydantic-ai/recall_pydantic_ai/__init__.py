@@ -24,4 +24,4 @@ try:
 
     __version__ = _version("recall-pydantic-ai")
 except Exception:  # pragma: no cover - source checkout without metadata
-    __version__ = "0.1.0"
+    __version__ = "0.1.1"
