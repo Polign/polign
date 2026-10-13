@@ -25,7 +25,7 @@ async def test_authenticated_cloud_memory_survives_server_restart(tmp_path, clou
 
     def memory(url):
         return RecallMemory.open(
-            command=[str(cli), "mcp", "-memory-only", "-write"],
+            command=[str(cli), "mcp", "-memory-only", "-write", "-typed"],
             url=url, api_key=key, collection="callers", predicates=VOICE_REGISTRY,
         )
 

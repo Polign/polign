@@ -16,7 +16,7 @@ from tests.scripted import ScriptedLLM, seen_text
 def open_memory(polign, collection=None, agent=False, **kwargs):
     url, cli = polign
     return RecallMemory.open(
-        command=[str(cli), "mcp", "-memory-only", "-write"] + (["-agent"] if agent else []),
+        command=[str(cli), "mcp", "-memory-only", "-write", "-typed"] + (["-agent"] if agent else []),
         url=url,
         collection=collection or "recall_livekit_" + uuid.uuid4().hex[:8],
         agent=agent,
