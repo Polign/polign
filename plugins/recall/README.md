@@ -53,21 +53,27 @@ next time Claude connects, and your memories stay in
 If you already have Recall running against a database, keep it: see
 [connection settings](docs/setup.md#connect-to-an-existing-database).
 
-### Let Recall work out the facts (optional)
+### Which model works out the facts
 
-By default Claude decides what to remember and fills in each fact itself. With
-recall 0.14 or later, you can give Recall a model to do that instead:
+At a terminal, `recall setup` asks which extraction model to use (recall 0.18
+or later). It lists `none`, a hosted model for each provider key it finds in
+the environment, and the local Ollama models that generate text, and never
+picks one itself. `-extract-model <provider:model>` answers without asking:
 
 ```sh
 recall setup -extract-model anthropic:claude-haiku-4-5-20251001
 ```
 
-Claude then gets three plain-text tools, `remember`, `recall` and `forget`, and
-answers come back as sentences with what each one replaced. The model is called
-on every remember and forget, needs `ANTHROPIC_API_KEY` (or `OPENAI_API_KEY` for
-`openai:<model>`) where Claude Code runs, and receives the text you remember.
-`ollama:<model>` runs locally; pick a fast model. Run setup with
-`-extract-model none` to go back. Your memories are kept either way.
+With a model, Claude gets three plain-text tools, `remember`, `recall` and
+`forget`, and answers come back as sentences with what each one replaced. The
+model is called on every remember and forget, needs `ANTHROPIC_API_KEY` (or
+`OPENAI_API_KEY` for `openai:<model>`) where Claude Code runs, and receives the
+text you remember. `ollama:<model>` runs locally; pick a fast model.
+
+With `none`, Claude decides what to remember and fills in each fact itself,
+with the typed tools. Run setup with `-extract-model none` to go back to that,
+or with `-typed` to keep the typed tools alongside a saved model. Your
+memories are kept either way.
 
 ## A few things to try
 

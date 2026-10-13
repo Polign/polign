@@ -2,8 +2,8 @@ apiVersion: v2
 name: recall
 description: Recall agent memory server (recall serve) on the vector store you already run
 type: application
-version: 0.2.0
-appVersion: "0.17.0"
+version: 0.3.0
+appVersion: "0.18.0"
 kubeVersion: ">=1.30.0-0"
 home: https://polign.com/recall
 icon: https://polign.com/assets/favicon.svg
@@ -20,14 +20,14 @@ annotations:
   artifacthub.io/prerelease: "true"
   artifacthub.io/images: |
     - name: recall
-      image: ghcr.io/polign/recall:0.17.0
+      image: ghcr.io/polign/recall:0.18.0
   artifacthub.io/links: |
     - name: Chart documentation
       url: https://github.com/Polign/polign/blob/main/charts/recall/README.md
     - name: Memory API
       url: https://github.com/Polign/recall/blob/main/docs/memory-api-v1.md
   artifacthub.io/changes: |
-    - kind: added
-      description: kubernetes.sandboxClaims makes the agent the name of the SandboxClaim that owns the pod's Sandbox, and grants get on pods, sandboxes and sandboxclaims.
     - kind: changed
-      description: Default image ghcr.io/polign/recall 0.17.0, whose workload keys are never renewed; pods exchange their token again.
+      description: Default image ghcr.io/polign/recall 0.18.0, which serves the text-only tools by default; set extractModel so the server works out the facts.
+    - kind: added
+      description: typed serves the typed tools over the registry, as earlier releases did by default.
