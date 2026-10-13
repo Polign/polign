@@ -1,4 +1,6 @@
-# Recall Helm chart, unreleased
+# Recall Helm chart 0.2.0
+
+Requires recall 0.17.0 or newer, the default image.
 
 - `kubernetes.sandboxClaims` passes `-kubernetes-sandbox-claims` (recall
   0.17.0 or newer): with agent-sandbox, the agent is the name of the
