@@ -96,8 +96,9 @@ class RecallMemory(AbstractCapability[AgentDepsT]):
     ``subject`` is a fixed string or a function of the run context, such as
     ``lambda ctx: ctx.deps.user_id``. Use a stable, auth-derived identifier.
 
-    ``client`` is a ``polign_recall.Client``. Create one per process and share
-    it: each one is a ``recall mcp`` subprocess or an HTTP session.
+    ``client`` is a ``polign_recall.Client`` opened with ``typed=True``: this
+    capability files typed beliefs. Create one per process and share it: each
+    one is a ``recall mcp -typed`` subprocess or an HTTP session.
 
     Reads fail open: if Recall is slow or down, the run goes on with no
     memory block and a warning is logged. Writes report the failure to the

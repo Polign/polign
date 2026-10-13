@@ -45,6 +45,8 @@ class RecallMemory:
         """Accept Client options, including local_dir, env, command, and timeout."""
         env = dict(client_options.pop("env", None) or {})
         env["POLIGN_PREDICATES"] = predicates
+        # The voice registry is typed, so the typed tools are asked for.
+        client_options.setdefault("typed", True)
         client = Client(env=env, **client_options)
         try:
             return cls(client, connection=_connection(env, client_options.get("local_dir")))

@@ -36,7 +36,7 @@ class Deps:
     user_id: str
 
 
-recall = Client(local_dir="./recall-data")   # one per process; the database lives here
+recall = Client(local_dir="./recall-data", typed=True)   # one per process; the database lives here
 
 agent = Agent(
     "anthropic:claude-sonnet-5-5",
@@ -74,7 +74,7 @@ auth-derived identifier for the user, never a session or conversation id.
 
 ## Where the memory is stored
 
-`Client(local_dir="./recall-data")` keeps the database on this machine. The
+`Client(local_dir="./recall-data", typed=True)` keeps the database on this machine. `typed=True` asks for the typed tools this capability files beliefs with (recall 0.18 or later). The
 first process to open the directory starts a `polign-server` for it in the
 background, listening on localhost only, and every other process shares that
 server. It keeps running after your program exits; its process id is in
@@ -86,7 +86,7 @@ somewhere they can all reach, storing into S3, GCS or Azure
 ([Get started](https://polign.com/developers.html) shows how), then connect:
 
 ```python
-recall = Client(url="https://memory.internal:8443", api_key=os.environ["RECALL_API_KEY"])
+recall = Client(url="https://memory.internal:8443", api_key=os.environ["RECALL_API_KEY"], typed=True)  # a recall serve started with -typed
 ```
 
 `Client.from_env()` does the same from `RECALL_URL` and `RECALL_API_KEY`, and
@@ -138,7 +138,7 @@ JSON and point the server at it:
 ```
 
 ```python
-recall = Client(local_dir="./recall-data", env={"POLIGN_PREDICATES": "registry.json"})
+recall = Client(local_dir="./recall-data", env={"POLIGN_PREDICATES": "registry.json"}, typed=True)
 ```
 
 `single` means a newer value replaces the old one; `multi` means each value is

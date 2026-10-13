@@ -81,8 +81,9 @@ class RecallMemory:
         path) become the ``POLIGN_URL``, ``POLIGN_API_KEY``, ``POLIGN_COLLECTION``
         and ``POLIGN_PREDICATES`` variables of the subprocess; anything left
         unset falls through to the worker's environment. ``command`` replaces
-        the default ``polign mcp -memory-only -write`` argv; the default runs
-        the ``polign`` binary that pip installed with this package.
+        the default ``recall mcp -write -typed`` argv; the default runs the
+        ``recall`` binary that pip installed with this package. A command must
+        serve the typed tools (``-typed`` from recall 0.18 on).
 
         ``agent=True`` also turns on the agent resume tools, which
         ``RecallAgent(resume=...)`` needs. It needs ``write=True``.
@@ -98,8 +99,10 @@ class RecallMemory:
         ):
             if value is not None:
                 merged[key] = value
+        # This package renders typed beliefs, so it asks for the typed tools;
+        # a command= that serves the text tools is refused at open.
         client = Client(command=command, env=merged, timeout=timeout, write=write,
-                        local_dir=local_dir, agent=agent)
+                        local_dir=local_dir, agent=agent, typed=True)
         try:
             return cls(client)
         except BaseException:
