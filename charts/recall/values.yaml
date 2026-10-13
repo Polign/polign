@@ -72,6 +72,13 @@ kubernetes:
   # <tenant>:<agent>, so a tenant can only name its own agents. Turning it on
   # lets the server read Pods.
   agentLabel: ""
+  # With agent-sandbox, the agent is the name of the SandboxClaim that owns the
+  # pod's Sandbox (pod -> Sandbox -> SandboxClaim), so a claim deleted and
+  # created again under the same name keeps its memory. A Sandbox with no claim
+  # falls back to agentLabel, then the pod's name; one still in a warm pool is
+  # refused until claimed. Needs recall 0.17.0 or newer. Turning it on lets the
+  # server read Pods, Sandboxes and SandboxClaims.
+  sandboxClaims: false
   keyTTL: 15m
   rbac:
     create: true

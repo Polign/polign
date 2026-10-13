@@ -1,6 +1,8 @@
 {{- if and .Values.kubernetes.enabled .Values.kubernetes.rbac.create }}
-# recall serve verifies workload tokens with the TokenReview API, and reads a
-# ServiceAccount only when the tenant comes from a label on it.
+# recall serve verifies workload tokens with the TokenReview API, reads a
+# ServiceAccount only when the tenant comes from a label on it, and reads Pods
+# (plus agent-sandbox Sandboxes and SandboxClaims) only when the agent comes
+# from a pod label or the pod's SandboxClaim.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -16,9 +18,17 @@ rules:
     resources: [serviceaccounts]
     verbs: [get]
   {{- end }}
-  {{- if .Values.kubernetes.agentLabel }}
+  {{- if or .Values.kubernetes.agentLabel .Values.kubernetes.sandboxClaims }}
   - apiGroups: [""]
     resources: [pods]
+    verbs: [get]
+  {{- end }}
+  {{- if .Values.kubernetes.sandboxClaims }}
+  - apiGroups: [agents.x-k8s.io]
+    resources: [sandboxes]
+    verbs: [get]
+  - apiGroups: [extensions.agents.x-k8s.io]
+    resources: [sandboxclaims]
     verbs: [get]
   {{- end }}
 ---

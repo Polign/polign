@@ -1,3 +1,11 @@
+# Recall Helm chart, unreleased
+
+- `kubernetes.sandboxClaims` passes `-kubernetes-sandbox-claims` (recall
+  0.17.0 or newer): with agent-sandbox, the agent is the name of the
+  SandboxClaim that owns the pod's Sandbox. The ClusterRole then also gets
+  `get` on Pods, `sandboxes.agents.x-k8s.io` and
+  `sandboxclaims.extensions.agents.x-k8s.io`.
+
 # Recall Helm chart 0.1.0
 
 Requires recall 0.16.0 or newer, the release that adds `recall serve`.

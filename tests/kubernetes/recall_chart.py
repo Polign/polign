@@ -69,6 +69,15 @@ rules = by_kind(docs, 'ClusterRole')[0]['rules']
 assert {'apiGroups': [''], 'resources': ['pods'], 'verbs': ['get']} in rules
 assert not any(r['resources'] == ['serviceaccounts'] for r in rules)
 assert '-kubernetes-agent-label=recall.polign.com/agent' in by_kind(docs, 'Deployment')[0]['spec']['template']['spec']['containers'][0]['args']
+assert not any('sandbox' in r['resources'][0] for r in rules)
+
+docs = render({'backend': BACKEND, 'kubernetes': {'enabled': True, 'sandboxClaims': True}})
+rules = by_kind(docs, 'ClusterRole')[0]['rules']
+assert {'apiGroups': [''], 'resources': ['pods'], 'verbs': ['get']} in rules
+assert {'apiGroups': ['agents.x-k8s.io'], 'resources': ['sandboxes'], 'verbs': ['get']} in rules
+assert {'apiGroups': ['extensions.agents.x-k8s.io'], 'resources': ['sandboxclaims'], 'verbs': ['get']} in rules
+args = by_kind(docs, 'Deployment')[0]['spec']['template']['spec']['containers'][0]['args']
+assert '-kubernetes-sandbox-claims' in args and not any(a.startswith('-kubernetes-agent-label') for a in args)
 
 # Qdrant: the driver's own key variable, and the resume tools can still be
 # asked for (the server declines them at start when there are no leases).
