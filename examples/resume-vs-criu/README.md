@@ -62,7 +62,7 @@ sudo add-apt-repository -y ppa:criu/ppa
 sudo apt-get install -y podman runc criu
 printf '[engine]\nruntime = "runc"\n' | sudo tee /etc/containers/containers.conf
 
-python3 -m venv ~/pv && ~/pv/bin/pip install polign_db==0.8.1
+python3 -m venv ~/pv && ~/pv/bin/pip install polign_db==0.14.0
 $(~/pv/bin/python -c 'import polign_db; print(polign_db.find_bin("polign-server"))') \
   -store fs:/var/lib/polign-demo -http 127.0.0.1:23000 &
 
