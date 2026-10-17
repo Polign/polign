@@ -1,5 +1,5 @@
 FROM docker.io/library/python:3.12-slim
-RUN pip install --no-cache-dir "recall-langgraph==0.1.1" "polign_db==0.8.1" "langchain-openai>=1.0,<2"
+RUN pip install --no-cache-dir "recall-langgraph==0.1.1" "polign_db==0.14.0" "langchain-openai>=1.0,<2"
 WORKDIR /app
 COPY agent.py task.py ./
 ARG AGENT_VERSION=v1

@@ -17,11 +17,11 @@ need polign-server "brew install polign/tap/recall, or pip install polign-recall
 need recall "brew install polign/tap/recall, or pip install polign-recall"
 need curl "your package manager"
 
-version_ok() { # recall 0.16.0 or later has `recall serve`
+version_ok() { # the recall release this example is tested with, or later
   local v; v=$(recall -version 2>/dev/null || echo 0)
-  [ "$(printf '%s\n0.16.0\n' "$v" | sort -V | head -1)" = "0.16.0" ]
+  [ "$(printf '%s\n0.20.2\n' "$v" | sort -V | head -1)" = "0.20.2" ]
 }
-version_ok || { echo "recall $(recall -version 2>/dev/null) is too old; 0.16.0 or later has recall serve" >&2; exit 1; }
+version_ok || { echo "recall $(recall -version 2>/dev/null) is too old; this example needs 0.20.2 or later" >&2; exit 1; }
 
 up() { curl -sf "http://$1/healthz" >/dev/null 2>&1; }
 wait_up() {

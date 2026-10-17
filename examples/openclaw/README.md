@@ -7,7 +7,7 @@ stays local; with the default model nothing leaves the machine.
 
 ## Before you start
 
-- `recall` 0.16.0 or later, which brings `polign-server`:
+- `recall` 0.20.2 or later, which brings `polign-server`:
   `brew install polign/tap/recall` or `pip install polign-recall`.
 - An extraction model. The default is `ollama:qwen3:8b`, so install
   [Ollama](https://ollama.com) and run `ollama pull qwen3:8b`. For better
