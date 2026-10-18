@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "recall-langgraph"
-version = "0.3.0"
+version = "0.2.0"
 description = "Resume LangGraph agents from their own records, backed by Recall by Polign"
 readme = "README.md"
 license = "Apache-2.0"
@@ -21,7 +21,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "polign-recall>=0.22.0",
+    "polign-recall>=0.21.0",
     "langgraph>=1.0,<2",
     "langchain-core>=1.0,<2",
 ]
