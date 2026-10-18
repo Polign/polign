@@ -21,7 +21,11 @@ from langchain_core.messages import (
 )
 from langchain_core.runnables import RunnableLambda
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
-from polign_recall import Client, Output, Pointer, ResumeContext, ResumedAgent, WorkingState
+from langchain_core.tools import BaseTool
+from polign_recall import (Action, ActionEnd, Client, Output, Pointer, ReconcileReport, ResumeContext, ResumedAgent,
+                           WorkingState)
+
+from .durable import KEY_ARG, DurableTool, Resolver, takes_key, tool_turn_id, wrap
 
 #: The id of the briefing message ``briefing_node`` adds to the state. The
 #: recorder skips it, so the briefing never becomes a turn of its own.
@@ -51,6 +55,11 @@ class RecallResume:
     messages you send the model (or add ``briefing_node``), and add
     ``record_node`` where new messages land.
 
+    Wrap the tools that touch the world with ``durable``: each call is then
+    recorded as an action before it runs and closed when it returns, and the
+    first briefing after a crash comes only once the calls it interrupted are
+    settled. ``resolver`` checks the external ones (see ``durable``).
+
     ``client`` is a ``polign_recall.Client`` opened with ``agent=True``. When
     it is left out, one is opened with ``local_dir`` and ``env`` and closed on
     release. Release on a clean shutdown (``release``, ``arelease``, or a
@@ -69,6 +78,7 @@ class RecallResume:
         output_threshold: int | None = None,
         local_dir: str | os.PathLike[str] | None = None,
         env: Mapping[str, str] | None = None,
+        resolver: Resolver | None = None,
     ) -> None:
         if client is not None and (local_dir is not None or env is not None):
             raise ValueError("local_dir and env open a client; do not pass them with client")
@@ -90,6 +100,12 @@ class RecallResume:
         self._record_lock = threading.Lock()
         self._recorded: set[str] = set()
         self._seeded = False
+        # Tool calls whose result a durable tool already recorded as a turn.
+        self._tool_turns: set[str] = set()
+        self._durable: dict[str, DurableTool] = {}
+        self._resolver = resolver
+        self._settle_lock = threading.Lock()
+        self._settled: ReconcileReport | None = None
 
     # Lifecycle.
 
@@ -162,7 +178,80 @@ class RecallResume:
 
     @property
     def briefing(self) -> str:
+        """The resume context as one text for the model. Reading it settles
+        the actions a crash left open first, so the model is never briefed
+        on a call that could have been settled without it."""
+        self.settle()
         return self.context.briefing
+
+    # Actions.
+
+    def durable(self, tools: Sequence[BaseTool], classes: Mapping[str, str] | None = None) -> list[BaseTool]:
+        """Wrap tools so each call is recorded as a Recall action. Give the
+        wrapped tools to the graph in place of the originals.
+
+        Every tool needs a class, from ``classes`` (tool name to class) or the
+        tool's ``metadata["recall_class"]``; an unclassified tool raises
+        ValueError rather than getting a guess:
+
+        - "pure": reads only. Interrupted, it is simply not counted.
+        - "idempotent": running it again with the same key does nothing more.
+          Interrupted, it is run again with the original key before the next
+          briefing. A tool with an ``idempotency_key`` argument gets the key
+          in it; annotate that argument ``InjectedToolArg``.
+        - "external": could happen twice (send, post, charge, delete).
+          Interrupted, it goes to ``resolver``, which should check the outside
+          system and return ``ActionEnd("done")`` or ``ActionEnd("failed")``,
+          or None when it cannot tell. Without a resolver, or when it cannot
+          tell, the call stays at the top of the briefing as one to check
+          before repeating.
+        """
+        wrapped = wrap(self, tools, classes)
+        for tool in wrapped:
+            self._durable[tool.name] = tool
+        return list(wrapped)
+
+    def settle(self) -> ReconcileReport:
+        """Settle the actions a crash left open, once per resume. The briefing
+        calls it; call it yourself to settle at a point you choose."""
+        with self._settle_lock:
+            if self._settled is None:
+                self._settled = self.agent.reconcile(self._resolve)
+            return self._settled
+
+    def _resolve(self, action: Action) -> ActionEnd | None:
+        tool = self._durable.get(action.tool)
+        if action.class_ == "idempotent" and tool is not None:
+            return self._rerun(tool, action)
+        if self._resolver is not None:
+            return self._resolver(action)
+        return None
+
+    def _rerun(self, tool: DurableTool, action: Action) -> ActionEnd | None:
+        raw = self.agent.fetch_output(action.args_ref).content if action.args_ref else action.args
+        try:
+            args = json.loads(raw) if raw else {}
+        except ValueError:
+            return None
+        if takes_key(tool.inner):
+            args[KEY_ARG] = action.key
+        try:
+            out = tool.inner.invoke(args)
+        except Exception as exc:
+            return ActionEnd("failed", error=f"{type(exc).__name__}: {exc}",
+                             resolution="re-run with the same key after a crash")
+        content = out.content if isinstance(out, ToolMessage) else out
+        text = content if isinstance(content, str) else json.dumps(content, default=str)
+        # reconcile records the result as a tool turn when it closes the action.
+        return ActionEnd("done", result=text, resolution="re-run with the same key after a crash")
+
+    def record_tool_result(self, call_id: str, name: str, content: str) -> None:
+        """Record a tool call's result as a turn at once, keyed by the call
+        id, so the ToolMessage the graph adds afterwards is not recorded
+        again. Durable tools call it before closing their action."""
+        with self._record_lock:
+            self.agent.record_turn("tool", content, name, message_id=tool_turn_id(call_id))
+            self._tool_turns.add(call_id)
 
     # The briefing.
 
@@ -249,6 +338,9 @@ class RecallResume:
                 key = _key(message)
                 if key in self._recorded or message.id == BRIEFING_ID:
                     continue
+                if isinstance(message, ToolMessage) and message.tool_call_id in self._tool_turns:
+                    self._recorded.add(key)
+                    continue
                 turn = _turn(message)
                 if turn is not None:
                     role, content, name = turn
@@ -273,6 +365,8 @@ class RecallResume:
         last = -1
         for i, message in enumerate(messages):
             if message.id and message.id in known:
+                last = i
+            elif isinstance(message, ToolMessage) and tool_turn_id(message.tool_call_id) in known:
                 last = i
         for message in messages[: last + 1]:
             self._recorded.add(_key(message))

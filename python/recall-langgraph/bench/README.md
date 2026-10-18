@@ -46,3 +46,53 @@ counted at full price, and no trial starts once the estimate reaches
 
 Results go to `results/<model>-<time>/`: `runs.jsonl` has one row per trial,
 `summary.json` the totals, and each trial's `ledger.jsonl` every model call.
+
+# Kill test
+
+Does an agent killed in the middle of a tool call ever repeat a side effect,
+or lose one, once it is resumed? `kill_actions.py` answers that with no model
+and no API key, so it is free to run and gives the same answer every time.
+
+The agent is a scripted, cautious policy. It calls `lookup_order` (pure),
+`save_invoice` (idempotent) and `send_email` (external) in turn. It skips a
+tool whose result it can see, and it does not repeat a call that its briefing
+says may already have happened. What it can see is exactly what Recall hands
+a resumed agent, so the test measures the harness, not how clever a model is.
+
+Each trial kills the first process, together with its Recall subprocess,
+with SIGKILL at one of three points:
+
+- **before**: the call is recorded but has not taken effect;
+- **after**: it took effect but the tool has not returned;
+- **returned**: the tool returned and the next model call never starts.
+
+A second process then resumes the agent and finishes. The tools append to
+files outside both processes, standing in for a mail server and an invoice
+store. Three setups are compared: `plain` (recall-langgraph resume with
+ordinary tools and no keys), `durable` (`RecallResume.durable`, no
+resolver) and `durable+resolver` (with a resolver that checks the mail log).
+
+```bash
+POLIGN_SERVER=/path/to/polign-server RECALL_BIN=/path/to/recall \
+    python kill_actions.py --runs 20 --parallel 12
+```
+
+Results from 2026-10-17: 540 trials, 20 per cell. Every trial was killed at
+its point, and every resumed run finished.
+
+| Setup | Duplicate emails | Duplicate invoices | Lost emails | Left for a person to check |
+|---|---|---|---|---|
+| plain | 20 of 60 email kills | 20 of 60 invoice kills | 0 | 0 |
+| durable | 0 | 0 | 0 | 40 (email killed before or after sending) |
+| durable+resolver | 0 | 0 | 0 | 0 |
+
+In the plain setup every duplicate comes from the **after** point, where
+the effect happened but its result was never recorded. With durable tools,
+the interrupted invoice is re-run with its original key, so the store keeps
+one. An interrupted email is never re-sent blindly. Without a resolver it
+waits at the top of the briefing for someone to check. With the resolver,
+the mail log settles it: emails already sent are recorded as done, and
+emails never sent are recorded as failed and then sent once.
+
+`results/kill-actions-<time>/` holds `runs.jsonl` (one row per trial) and
+`summary.json`.

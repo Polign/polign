@@ -113,6 +113,71 @@ builder.add_edge("model", "record")
 
 The hooks and nodes work with `invoke` and `ainvoke`.
 
+## Tool calls that touch the world
+
+The records above tell a new process what the agent was doing. They cannot
+tell it whether the last tool call happened. If the process died while
+`send_email` was running, the email may or may not have gone out, and an
+agent that just carries on will often send it again.
+
+Wrap those tools with `resume.durable`. Each call is then recorded before it
+runs and closed with its result when it returns, so a call a crash
+interrupted is still open when the next process resumes:
+
+```python
+from recall_langgraph import ActionEnd, RecallResume, recall_tools
+
+def sent_folder(action):
+    # Ask the outside system whether the call took effect.
+    if mailbox.has_sent_since(action.started_at, subject_in=action.args):
+        return ActionEnd("done", resolution="found in the sent folder")
+    return None  # cannot tell
+
+resume = RecallResume("support-agent", resolver=sent_folder)
+tools = resume.durable(
+    [lookup_order, save_invoice, send_email],
+    classes={"lookup_order": "pure", "save_invoice": "idempotent", "send_email": "external"},
+)
+agent = create_react_agent(model, [*tools, *recall_tools(resume)],
+                           pre_model_hook=resume.pre_model_hook,
+                           post_model_hook=resume.post_model_hook)
+```
+
+Every wrapped tool needs a class. A tool without one is refused when you
+call `durable`, rather than given a guess:
+
+| Class | Use it for | If a crash interrupted the call |
+|---|---|---|
+| `pure` | reads: lookups, searches, listings | Closed as abandoned. The model runs it again if it still needs the answer. |
+| `idempotent` | writes that are safe to repeat with the same key: a PUT by id, a push of a known commit, a payment with an idempotency key | Run again with the same key before the first briefing, and the result goes into the history. |
+| `external` | anything that could happen twice: send, post, charge, delete | Passed to `resolver`. If it says done or failed, that is recorded. If there is no resolver, or it returns None, the call is listed at the top of the briefing as one to check before repeating. |
+
+An idempotent tool gets the key in an argument named `idempotency_key`, the
+same key on every retry. Annotate it so the model is not asked for it:
+
+```python
+from typing import Annotated
+from langchain_core.tools import InjectedToolArg, tool
+
+@tool
+def save_invoice(invoice: str, total: int,
+                 idempotency_key: Annotated[str, InjectedToolArg] = "") -> str:
+    """Save an invoice."""
+    return billing.put(invoice, total, idempotency_key=idempotency_key)
+```
+
+Settling happens once per resume, before the model sees its first briefing.
+Call `resume.settle()` to do it at a point you choose; it returns what was
+closed and what is still open. `resume.context.pending_actions` lists the
+open calls.
+
+A tool that raises an exception is recorded as failed. Cancellation, a
+`KeyboardInterrupt` or a killed process leaves the call open, since nothing
+says whether it took effect. A LangGraph `interrupt()` inside a tool closes
+the call as abandoned, because LangGraph runs the tool again from the start
+when the graph resumes. Recall never runs a tool on its own: the re-run of an
+idempotent call is this package calling your tool, with its key.
+
 ## The tools
 
 | Tool | What the model uses it for |
@@ -140,6 +205,7 @@ and `resume.set_pointer`, and `resume.agent` is the underlying
 | `lease_ttl` | 60 | Seconds each lease epoch lasts; renewed in the background |
 | `holder` | host, pid and a random suffix | Names this process in lease records |
 | `output_threshold` | 2000 | Turns longer than this many tokens are stored as outputs |
+| `resolver` | none | Called with each interrupted external call on resume; see [Tool calls that touch the world](#tool-calls-that-touch-the-world) |
 
 ## Errors
 
@@ -147,7 +213,9 @@ If another process holds the agent, resuming raises
 `polign_recall.RecallError` with code `"lease_held"`. Wait and try again, or
 stop. If another process takes the agent over mid-run, the next record fails
 with code `"lease_lost"`, which stops the graph run; this process should
-stop acting for the agent.
+stop acting for the agent. On polign_db and Postgres the server checks this
+too, so a process that froze past its lease cannot land a late write over
+the new holder's records.
 
 Records are append-only. Removing or trimming messages in the graph state
 changes what the model sees, never what was recorded.
