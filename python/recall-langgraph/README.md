@@ -115,11 +115,11 @@ The hooks and nodes work with `invoke` and `ainvoke`.
 
 ## Tool calls that touch the world
 
-
 Needs `recall-langgraph` 0.3.0 or later with Recall 0.22.0 or later. Resume
 and durable tools are a beta surface in Recall: a minor release may change
 them, with a migration note in Recall's changelog. See
 [STABILITY.md](https://github.com/Polign/recall/blob/main/STABILITY.md).
+
 The records above tell a new process what the agent was doing. They cannot
 tell it whether the last tool call happened. If the process died while
 `send_email` was running, the email may or may not have gone out, and an
