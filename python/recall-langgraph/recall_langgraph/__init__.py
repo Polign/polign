@@ -22,4 +22,4 @@ try:
 
     __version__ = _version("recall-langgraph")
 except Exception:  # pragma: no cover - source checkout without metadata
-    __version__ = "0.2.0"
+    __version__ = "0.3.0"
