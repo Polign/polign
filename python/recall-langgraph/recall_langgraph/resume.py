@@ -242,7 +242,7 @@ class RecallResume:
                              resolution="re-run with the same key after a crash")
         content = out.content if isinstance(out, ToolMessage) else out
         text = content if isinstance(content, str) else json.dumps(content, default=str)
-        self.agent.record_turn("tool", text, action.tool, brief=f"(re-run after a crash, key {action.key}) {text[:200]}")
+        # reconcile records the result as a tool turn when it closes the action.
         return ActionEnd("done", result=text, resolution="re-run with the same key after a crash")
 
     def record_tool_result(self, call_id: str, name: str, content: str) -> None:

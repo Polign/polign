@@ -178,6 +178,9 @@ def test_a_resolver_settles_an_external_call_before_the_model_sees_it(client, sh
         assert "Unfinished" not in seen_text(model.inputs[0])
         assert resume.settle().closed[0].resolution == "found in the sent folder"
     assert shop.sent == ["Your car is ready"]
+    # The settled outcome is in the history, where the model looks for it.
+    settled = [t for t in client.turns if t.role == "tool" and t.name == "send_email"]
+    assert len(settled) == 1 and "settled after a crash: done; found in the sent folder" in settled[0].brief
     assert list(client.actions.values())[0].status == "done"
 
 
@@ -196,6 +199,7 @@ def test_an_interrupted_idempotent_call_is_run_again_with_its_key(client, shop):
         seen = seen_text(model.inputs[0])
         assert "Unfinished" not in seen and "saved inv-17" in seen
     assert shop.writes == 2 and list(shop.invoices) == [first_key]  # two calls, one invoice
+    assert [t.content for t in client.turns if t.role == "tool"] == ["saved inv-17"]  # recorded once
     action = list(client.actions.values())[0]
     assert action.status == "done" and action.resolution == "re-run with the same key after a crash"
 
