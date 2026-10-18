@@ -129,19 +129,20 @@ def worker(args: argparse.Namespace) -> None:
         return f"{MARKER['save_invoice']} saved {invoice}"
 
     @tool
-    def send_email(to: str, subject: str) -> str:
+    def send_email(to: str, subject: str, idempotency_key: Annotated[str, InjectedToolArg] = "") -> str:
         """Send an email."""
         maybe_die("send_email", "before")
-        effect("sent", {"to": to, "subject": subject})
+        # The key rides along as a header would, so the mail log can be
+        # searched by it after a crash.
+        effect("sent", {"to": to, "subject": subject, "key": idempotency_key or None})
         maybe_die("send_email", "after")
         return f"{MARKER['send_email']} sent"
 
     def mail_log(action) -> ActionEnd | None:
-        """The resolver: the mail server's log is the outside system."""
+        """The resolver: looks the call up in the mail server's log by its key."""
         sent = world / "sent.jsonl"
         rows = [json.loads(line) for line in sent.read_text().splitlines()] if sent.exists() else []
-        wanted = json.loads(action.args or "{}").get("subject")
-        if any(r["subject"] == wanted for r in rows):
+        if any(r.get("key") == action.key for r in rows):
             return ActionEnd("done", result=MARKER["send_email"] + " sent", resolution="found in the mail log")
         return ActionEnd("failed", resolution="not in the mail log")
 
@@ -228,7 +229,7 @@ def worker(args: argparse.Namespace) -> None:
     final = result["messages"][-1].content
     if not isinstance(final, str):
         final = " ".join(b.get("text", "") for b in final if isinstance(b, dict))
-    pending = [a.tool for a in resume.agent.pending_actions()] if args.mode != "plain" else []
+    pending = [a.tool for a in resume.open_actions()] if args.mode != "plain" else []
     (world / f"phase{args.phase}.json").write_text(json.dumps({
         "final": "FINISHED" if "FINISHED" in final else final[-600:], "pending": pending}))
     resume.release()
@@ -329,6 +330,8 @@ def main() -> None:
     p.add_argument("--model", default="", help="a Claude model id; the scripted policy when empty")
     p.add_argument("--budget", type=float, default=20.0, help="stop starting trials once this many dollars are spent")
     p.add_argument("--modes", default=",".join(MODES), help="comma-separated subset of " + ",".join(MODES))
+    p.add_argument("--tools", default=",".join(TOOLS), help="comma-separated subset of " + ",".join(TOOLS))
+    p.add_argument("--points", default=",".join(POINTS), help="comma-separated subset of " + ",".join(POINTS))
     p.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     for flag in ("--mode", "--agent", "--world", "--phase", "--kill"):
         p.add_argument(flag, help=argparse.SUPPRESS)
@@ -347,7 +350,9 @@ def main() -> None:
         sys.exit(f"no price for {args.model}; add it to PRICES")
     modes = [m for m in args.modes.split(",") if m]
     budget = Budget(args.budget) if args.model else None
-    plan = [(m, t, k, n) for n in range(args.runs) for m in modes for t in TOOLS for k in POINTS]
+    tools = [t for t in args.tools.split(",") if t]
+    points = [k for k in args.points.split(",") if k]
+    plan = [(m, t, k, n) for n in range(args.runs) for m in modes for t in tools for k in points]
     rows: list[dict] = []
     try:
         with ThreadPoolExecutor(args.parallel) as pool, open(out / "runs.jsonl", "w") as f:
@@ -361,11 +366,11 @@ def main() -> None:
 
     summary = []
     print(f"{'mode':<17} {'tool':<13} {'kill point':<10} {'runs':>4} {'dup emails':>10} {'lost emails':>11} "
-          f"{'dup invoices':>12} {'for a human':>11} {'unfinished':>10}")
+          f"{'dup invoices':>12} {'for a human':>11} {'unfinished':>10} {'done while open':>15}")
     rows = [r for r in rows if "skipped" not in r]
     for m in modes:
-        for t in TOOLS:
-            for k in POINTS:
+        for t in tools:
+            for k in points:
                 cell = [r for r in rows if (r["mode"], r["tool"], r["point"]) == (m, t, k)]
                 s = {
                     "mode": m, "tool": t, "point": k, "runs": len(cell),
@@ -375,10 +380,11 @@ def main() -> None:
                     "duplicate_invoices": sum(max(0, r["invoices"] - 1) for r in cell),
                     "left_for_a_human": sum(bool(r["left_for_a_human"]) for r in cell),
                     "unfinished": sum(not r["finished"] for r in cell),
+                    "done_while_open": sum(r["finished"] and bool(r["left_for_a_human"]) for r in cell),
                 }
                 summary.append(s)
                 print(f"{m:<17} {t:<13} {k:<10} {s['runs']:>4} {s['duplicate_emails']:>10} {s['lost_emails']:>11} "
-                      f"{s['duplicate_invoices']:>12} {s['left_for_a_human']:>11} {s['unfinished']:>10}")
+                      f"{s['duplicate_invoices']:>12} {s['left_for_a_human']:>11} {s['unfinished']:>10} {s['done_while_open']:>15}")
     (out / "summary.json").write_text(json.dumps(summary, indent=2))
     bad = [s for s in summary if s["not_killed"]]
     if bad:

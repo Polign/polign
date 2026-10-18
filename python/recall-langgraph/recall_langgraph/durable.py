@@ -20,9 +20,12 @@ if TYPE_CHECKING:
 #: The classes a tool can have. See ``RecallResume.durable``.
 CLASSES = ("pure", "idempotent", "external")
 
-#: An idempotent tool with an argument of this name gets the action's key in
-#: it, the same key on every retry. Annotate it ``InjectedToolArg`` so the
-#: model is not asked for it.
+#: A durable tool with an argument of this name gets the action's key in it,
+#: the same key on every retry. An idempotent tool passes it to the outside
+#: system so a repeat does nothing; an external tool records it with what it
+#: does (a mail header, ticket metadata), so a resolver can look the call up
+#: by key after a crash. Annotate it ``InjectedToolArg`` so the model is not
+#: asked for it.
 KEY_ARG = "idempotency_key"
 
 #: Turns recorded for a tool's result use this message id, so the recorder can
@@ -86,7 +89,7 @@ class DurableTool(BaseTool):
         args = dict(input.get("args") or {}) if is_call else (dict(input) if isinstance(input, Mapping) else {"input": input})
         shown = {k: v for k, v in args.items() if k != KEY_ARG}
         action = self.resume.agent.begin_action(self.name, self.action_class, shown)
-        if self.action_class == "idempotent" and takes_key(self.inner):
+        if takes_key(self.inner):
             args[KEY_ARG] = action.key
             input = {**input, "args": args} if is_call else args
         return action, (input.get("id") if is_call else None), input

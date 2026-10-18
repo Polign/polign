@@ -128,3 +128,22 @@ kills ended with exactly one email sent.
 Opus's FINISHED is not proof that every action was settled: in 9 of the 10
 durable runs that left the email unconfirmed it still replied FINISHED.
 Check `pending_actions`, not the reply.
+
+### After two fixes
+
+Two changes followed from those results: durable tools now pass the action's
+key to every tool that takes one, external ones included, so the mail log
+records it and the resolver looks the call up by key rather than by subject;
+and the briefing now says the task is not finished while an action is
+unconfirmed, and that the final answer must name it. Re-run on Opus 5.5 with
+email kills before and after the send, 5 each, $1.82:
+
+| Setup | Emails sent exactly once | Left open | Opus replied FINISHED while open |
+|---|---|---|---|
+| Durable tools with the key resolver | 10 of 10 | 0 | 0 |
+| Durable tools, no resolver | 5 of 10 (the rest never went out) | 10 | 4 of 10 (9 of 10 before the wording change) |
+
+With a resolver that can find the call by its key, every email went out
+exactly once. Without one, nothing can tell whether an email went out, so it
+stays open for a person; the wording halved how often Opus called the task
+done anyway, and `resume.open_actions()` listed every one of them.
