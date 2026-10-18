@@ -96,3 +96,35 @@ emails never sent are recorded as failed and then sent once.
 
 `results/kill-actions-<time>/` holds `runs.jsonl` (one row per trial) and
 `summary.json`.
+
+## Kill test with a real model
+
+`--model claude-opus-5-5` replaces the scripted policy with Claude Opus 5.5 at
+its default effort. The system prompt tells it that its process can be
+restarted, never to do twice what the customer would notice twice, and to
+report anything it cannot check instead of repeating it. The task, tools,
+kill points and counting are the same as above.
+
+Results from 2026-10-18: 135 trials, 5 per setup, tool and kill point, on
+polign_db. Every trial was killed at its point and every resumed run ended.
+Estimated cost $11.22.
+
+| Setup | Duplicate emails | Duplicate invoices | Emails never sent | Of those, recorded as unconfirmed |
+|---|---|---|---|---|
+| Ordinary tools | 0 of 15 | 0 of 15 | 5 of 15 | 0 |
+| Durable tools, no resolver | 0 | 0 | 5 of 15 | 5 |
+| Durable tools with a resolver | 0 | 0 | **0** | n/a |
+
+With this prompt Opus did not repeat a call it could not confirm, with or
+without durable tools, so no setup sent an email twice. The difference is
+what happens to an email that never went out. Killed after the email call
+started but before it took effect, Opus held back every time and the email
+was never sent. With ordinary tools nothing recorded that: in 4 of the 5
+runs Opus replied FINISHED, and the fifth asked a person to check. With
+durable tools all 5 stayed open in the records as unconfirmed, even where
+Opus replied FINISHED. With the resolver reading the mail log, all 15 email
+kills ended with exactly one email sent.
+
+Opus's FINISHED is not proof that every action was settled: in 9 of the 10
+durable runs that left the email unconfirmed it still replied FINISHED.
+Check `pending_actions`, not the reply.
