@@ -250,3 +250,27 @@ async def test_durable_tools_work_async(client, shop):
         await graph.ainvoke({"messages": [("user", "Invoice it.")]}, {"configurable": {"thread_id": "t"}})
     action = list(client.actions.values())[0]
     assert action.status == "done" and list(shop.invoices) == [action.key]
+
+
+def test_an_external_tool_gets_the_key_to_record_and_open_actions_lists_what_is_open(client, shop):
+    recorded = []
+
+    @tool
+    def send_sms(body: str, idempotency_key: Annotated[str, InjectedToolArg] = "") -> str:
+        """Send a text message."""
+        recorded.append(idempotency_key)
+        raise Killed()
+
+    model = ScriptedChatModel([("send_sms", {"body": "Your car is ready"})])
+    resume = RecallResume("shop-1", client=client)
+    resume.open()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        graph = create_react_agent(model, resume.durable([send_sms], {"send_sms": "external"}),
+                                   pre_model_hook=resume.pre_model_hook, post_model_hook=resume.post_model_hook)
+    with pytest.raises(Killed):
+        graph.invoke({"messages": [("user", "Text Maria.")]})
+    action = list(client.actions.values())[0]
+    # The key a resolver will look the message up by reached the tool.
+    assert recorded == [action.key] and action.key
+    assert [a.tool for a in resume.open_actions()] == ["send_sms"]

@@ -197,19 +197,31 @@ class RecallResume:
         - "pure": reads only. Interrupted, it is simply not counted.
         - "idempotent": running it again with the same key does nothing more.
           Interrupted, it is run again with the original key before the next
-          briefing. A tool with an ``idempotency_key`` argument gets the key
-          in it; annotate that argument ``InjectedToolArg``.
+          briefing.
         - "external": could happen twice (send, post, charge, delete).
           Interrupted, it goes to ``resolver``, which should check the outside
           system and return ``ActionEnd("done")`` or ``ActionEnd("failed")``,
           or None when it cannot tell. Without a resolver, or when it cannot
           tell, the call stays at the top of the briefing as one to check
           before repeating.
+
+        A tool with an ``idempotency_key`` argument, of any class, gets the
+        action's key in it; annotate that argument ``InjectedToolArg``. Pass
+        it to the outside system: an idempotent tool uses it to drop
+        repeats, an external one records it so ``resolver`` can find the
+        call by key.
         """
         wrapped = wrap(self, tools, classes)
         for tool in wrapped:
             self._durable[tool.name] = tool
         return list(wrapped)
+
+    def open_actions(self) -> list[Action]:
+        """Tool calls still open: begun and never ended, or settled as unknown.
+        Check this when a run ends instead of trusting the model's reply; a
+        model can call a task done while a call it could not confirm is
+        still open."""
+        return self.agent.pending_actions()
 
     def settle(self) -> ReconcileReport:
         """Settle the actions a crash left open, once per resume. The briefing

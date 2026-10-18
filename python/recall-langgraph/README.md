@@ -115,6 +115,10 @@ The hooks and nodes work with `invoke` and `ainvoke`.
 
 ## Tool calls that touch the world
 
+Resume and durable tools are a beta surface in Recall: a minor release may
+change them, with a migration note in Recall's changelog. See
+[STABILITY.md](https://github.com/Polign/recall/blob/main/STABILITY.md).
+
 The records above tell a new process what the agent was doing. They cannot
 tell it whether the last tool call happened. If the process died while
 `send_email` was running, the email may or may not have gone out, and an
@@ -152,8 +156,12 @@ call `durable`, rather than given a guess:
 | `idempotent` | writes that are safe to repeat with the same key: a PUT by id, a push of a known commit, a payment with an idempotency key | Run again with the same key before the first briefing, and the result goes into the history. |
 | `external` | anything that could happen twice: send, post, charge, delete | Passed to `resolver`. If it says done or failed, that is recorded. If there is no resolver, or it returns None, the call is listed at the top of the briefing as one to check before repeating. |
 
-An idempotent tool gets the key in an argument named `idempotency_key`, the
-same key on every retry. Annotate it so the model is not asked for it:
+Any durable tool with an argument named `idempotency_key` gets the action's
+key in it, the same key on every retry. An idempotent tool passes it to the
+outside system so a repeat does nothing more. An external tool records it
+with what it does (a mail header, ticket metadata, a payment reference), so
+your resolver can look the call up by key instead of guessing from its
+arguments. Annotate the argument so the model is not asked for it:
 
 ```python
 from typing import Annotated
@@ -168,8 +176,10 @@ def save_invoice(invoice: str, total: int,
 
 Settling happens once per resume, before the model sees its first briefing.
 Call `resume.settle()` to do it at a point you choose; it returns what was
-closed and what is still open. `resume.context.pending_actions` lists the
-open calls.
+closed and what is still open. When a run ends, check `resume.open_actions()`
+rather than the model's reply: a model can call the task done while a call
+it could not confirm is still open (Claude Opus 5.5 did, in 4 of 10 kill
+trials even after the briefing was changed to say the task is not finished).
 
 A tool that raises an exception is recorded as failed. Cancellation, a
 `KeyboardInterrupt` or a killed process leaves the call open, since nothing
