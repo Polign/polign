@@ -64,8 +64,10 @@ picks one itself. `-extract-model <provider:model>` answers without asking:
 recall setup -extract-model anthropic:claude-haiku-4-5-20251001
 ```
 
-With a model, Claude gets three plain-text tools, `remember`, `recall` and
-`forget`, and answers come back as sentences with what each one replaced. The
+With a model, Claude gets plain-text tools, `remember`, `recall` and
+`forget`, and answers come back as sentences with what each one replaced.
+`history` shows how something changed, correction by correction, and `diff`
+what changed between two times. The
 model is called on every remember and forget, needs `ANTHROPIC_API_KEY` (or
 `OPENAI_API_KEY` for `openai:<model>`) where Claude Code runs, and receives the
 text you remember. `ollama:<model>` runs locally; pick a fast model.
@@ -86,6 +88,8 @@ After `/recall:recall-memory`, you can ask:
 | Look something up | Which test framework does recall-demo use? |
 | Change a preference | Remember that I now prefer detailed answers. |
 | Look back | Show the history of my answer-style preference. |
+| See what changed | What changed in what you know about me since last week? |
+| Look at a past moment | What did you think my editor was on October 1? |
 | Forget a preference | Forget my preferred editor. |
 
 Forgetting removes a fact from current answers and keeps it in the history.

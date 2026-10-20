@@ -8,6 +8,7 @@ two tool surfaces; check its tool list:
 
 - **Text tools**: `remember`, `recall`, and `forget` take plain text, and there
   is no `list_predicates`. The server has its own model and works out the facts.
+  Newer servers add `history` and `diff`, which read the record of corrections.
 - **Typed tools**: `remember` takes a subject, predicate, and value, alongside
   `list_predicates`, `memory_history`, and `explain`.
 
@@ -25,6 +26,18 @@ Answer from the current value, and mention the correction when it matters.
 `as_of` asks what was believed at an earlier time. Withdraw with
 `{"text": "my editor"}`; it reports what it withdrew, and the source texts stay
 as the record.
+
+When the user asks what changed, when, or why something is believed, call
+`history` with `{"question": "my editor"}`. It returns each thing it reaches
+with what is believed `now` and every change oldest first: `when`, `change`
+(`stated`, `replaced`, `withdrawn`), and the sentences it `ended` and `began`.
+Something since forgotten still has its history. Tell the story in order and
+plainly: "You used vim until Sept 20, then emacs, and zed since Oct 5."
+
+At the start of a session, or when asked what changed over a period, call
+`diff` with `{"from": "<RFC3339 instant>"}` (and `to`, default now). It lists
+what began and stopped being believed in between. Mention only changes that
+matter to the task at hand.
 
 ## Typed tools
 
