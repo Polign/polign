@@ -1,11 +1,11 @@
-"""Turn beliefs into the block of text the model reads."""
+"""Turn beliefs, or text-mode memories, into the block of text the model reads."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from polign_recall import Belief
+from polign_recall import Belief, Memory
 
 DEFAULT_TEMPLATE = "<recall_memory>\n{context}\n</recall_memory>"
 
@@ -57,10 +57,62 @@ def render_beliefs(
     subject has more beliefs than were loaded. ``template`` must contain a
     literal ``{context}``.
     """
+    kinds = ", ".join(registry) if registry else "the registered memory types"
+    return _block(
+        render_lines(beliefs, registry),
+        render_lines(matches, registry),
+        template=template,
+        who=who,
+        remember_hint=(
+            f"When {who} states a lasting fact of one of these kinds, call the remember tool "
+            f"with it: {kinds}. Corrections go through the same tool. "
+        )
+        if remember_tool
+        else "",
+    )
+
+
+def memory_lines(memories: Iterable[Memory]) -> list[str]:
+    """One line per text-mode memory, with the day it was stated."""
+    lines: list[str] = []
+    for memory in memories:
+        since = (memory.since or "")[:10]
+        lines.append(f"- {memory.text}" + (f" (since {since})" if since else ""))
+    return lines
+
+
+def render_memories(
+    memories: Iterable[Memory],
+    *,
+    template: str = DEFAULT_TEMPLATE,
+    who: str = "the user",
+    remember_tool: bool = True,
+    matches: Iterable[Memory] = (),
+) -> str:
+    """Render what a text-mode Recall believes as a memory block.
+
+    ``matches`` are extra memories found by asking with the prompt when there
+    were more memories than were loaded. ``template`` must contain a literal
+    ``{context}``.
+    """
+    return _block(
+        memory_lines(memories),
+        memory_lines(matches),
+        template=template,
+        who=who,
+        remember_hint=(
+            f"When {who} states a lasting fact, a preference, a decision, or a correction, call the "
+            "remember tool with it, in their words. "
+        )
+        if remember_tool
+        else "",
+    )
+
+
+def _block(facts: list[str], extra: list[str], *, template: str, who: str, remember_hint: str) -> str:
     if "{context}" not in template:
         raise ValueError("context template must contain a literal {context} placeholder")
 
-    facts = render_lines(beliefs, registry)
     lines: list[str] = []
     if facts:
         lines.append(
@@ -72,17 +124,11 @@ def render_beliefs(
     else:
         lines.append(f"Nothing is remembered about {who} yet.")
 
-    extra = render_lines(matches, registry)
     if extra:
         lines.append(f"More remembered facts about {who} that match this request:")
         lines.extend(extra)
 
-    if remember_tool:
-        kinds = ", ".join(registry) if registry else "the registered memory types"
-        lines.append(
-            f"When {who} states a lasting fact of one of these kinds, call the remember tool "
-            f"with it: {kinds}. Corrections go through the same tool. "
-            "Do not mention the memory system unless asked."
-        )
+    if remember_hint:
+        lines.append(remember_hint + "Do not mention the memory system unless asked.")
 
     return template.replace("{context}", "\n".join(lines))
