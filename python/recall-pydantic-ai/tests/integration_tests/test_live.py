@@ -20,11 +20,9 @@ os.environ.setdefault("PYDANTIC_AI_NO_BANNER", "1")
 pytestmark = pytest.mark.skipif(recall_bin() is None, reason="the recall binary is not installed")
 
 
-@pytest.fixture(scope="module")
-def client(tmp_path_factory):
-    data = tmp_path_factory.mktemp("recall-data")
+def _open(data, **kwargs):
     try:
-        with Client(local_dir=data, typed=True) as c:
+        with Client(local_dir=data, **kwargs) as c:
             yield c
     finally:
         # local_dir starts a detached polign-server that outlives the client.
@@ -33,6 +31,17 @@ def client(tmp_path_factory):
                 os.kill(json.load(f)["pid"], signal.SIGTERM)
         except (OSError, ValueError, KeyError):
             pass
+
+
+@pytest.fixture(scope="module")
+def client(tmp_path_factory):
+    yield from _open(tmp_path_factory.mktemp("recall-data"), typed=True)
+
+
+@pytest.fixture(scope="module")
+def text_client(tmp_path_factory):
+    # No extraction model: text is kept as written and replaces nothing.
+    yield from _open(tmp_path_factory.mktemp("recall-text"))
 
 
 def test_correction_across_runs_keeps_history(client):
@@ -73,3 +82,20 @@ def test_subjects_are_separate(client):
     script = Scripted()
     Agent(script.model(), capabilities=[RecallMemory(client, "live-b")]).run_sync("hi")
     assert "Ana" not in script.seen[0].instructions
+
+
+def test_text_remember_is_seen_next_run(text_client):
+    memory = RecallMemory(text_client, forget_tool=True)
+    assert memory.text
+    script = Scripted(calls=[("remember", {"text": "My editor is Helix and I live in Lisbon."})])
+    agent = Agent(script.model(), capabilities=[memory])
+    assert agent.run_sync("I use Helix, in Lisbon").output == "Kept as written."
+
+    agent.run_sync("hi")
+    assert "- My editor is Helix and I live in Lisbon." in script.seen[-1].instructions
+
+
+def test_text_forget_without_extraction_is_told_to_the_model(text_client):
+    script = Scripted(calls=[("forget", {"text": "my editor"})])
+    out = Agent(script.model(), capabilities=[RecallMemory(text_client, forget_tool=True)]).run_sync("forget it").output
+    assert "Nothing was withdrawn" in out and "extract-model" in out
