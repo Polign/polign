@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   vapi:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -33,7 +33,7 @@ jobs:
         run: python -m build
 
   unit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -52,7 +52,7 @@ jobs:
 
   polign_db:
     # The wheel builder for the binary package, against synthetic archives.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -68,7 +68,7 @@ jobs:
     # Runs the client against the released server binary, which is what
     # `pip install polign` users actually talk to. POLIGN_SERVER_VERSION
     # pins a release; unset, the fixture resolves the latest stable tag.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -92,7 +92,7 @@ jobs:
   langchain:
     # The LangChain vector store: unit tests on the supported range, then
     # LangChain's standard vector store suite against the latest server release.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -124,7 +124,7 @@ jobs:
 
   llamaindex:
     # The LlamaIndex vector store, tested against the latest server release.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -155,7 +155,7 @@ jobs:
     # Recall resume for LangGraph agents: unit tests over a fake Recall client
     # inside real graphs on the supported range, then the real `polign mcp`
     # and server from the latest release.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -187,7 +187,7 @@ jobs:
     # Recall memory for Pydantic AI agents: unit tests over a fake Recall
     # client inside real agent runs on the supported range, then the real
     # `recall` binary and polign-server that pip installs with polign-recall.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -216,7 +216,7 @@ jobs:
     # Recall memory for LiveKit voice agents: unit tests over a fake Recall
     # subprocess on the supported range, then the real `polign mcp` and server
     # from the latest release.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
