@@ -15,10 +15,24 @@ VOICE_REGISTRY = str(resources.files(__package__).joinpath("registry_voice.json"
 
 
 def _connection(env: dict, local_dir: Any, backend: str | None = None, backend_url: Any = None,
-                backend_key: str | None = None) -> dict[str, str | None] | None:
+                backend_key: str | None = None, database: Any = None) -> dict[str, str | None] | None:
     """Where the Recall client's polign_db server is, in the terms
     polign.Client takes, or None when memory is in a backend that is not a
-    polign_db (call state then needs ``state=``)."""
+    polign_db (call state then needs ``state=``).
+
+    ``database`` is what the recall server reported (``Client.database``,
+    recall 0.23 or later) and settles it; without one, the arguments and the
+    environment are read the way the older binary read them.
+    """
+    if database is not None:
+        if database.backend == "local":
+            with open(os.path.join(database.url, "local-key")) as f:
+                return {"url": database.server, "api_key": f.read().strip() or None}
+        if database.backend == "polign":
+            key = backend_key or env.get("RECALL_BACKEND_KEY") or env.get("POLIGN_API_KEY") \
+                or os.environ.get("RECALL_BACKEND_KEY") or os.environ.get("POLIGN_API_KEY") or None
+            return {"url": database.url, "api_key": key}
+        return None
     if local_dir is not None or backend == "local":
         # Recall's managed local server leaves these behind when it starts.
         directory = local_dir if local_dir is not None else backend_url
@@ -77,7 +91,8 @@ class RecallMemory:
         client = Client(env=env, **client_options)
         try:
             return cls(client, connection=_connection(env, client_options.get("local_dir"), client_options.get("backend"),
-                                                      client_options.get("backend_url"), client_options.get("backend_key")))
+                                                      client_options.get("backend_url"), client_options.get("backend_key"),
+                                                      getattr(client, "database", None)))
         except BaseException:
             client.close()
             raise

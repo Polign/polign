@@ -52,6 +52,11 @@ def test_default_state_lives_on_the_memory_server(client, tmp_path, monkeypatch)
     assert _connection({}, None, "polign", "https://db.example", "k") == {"url": "https://db.example", "api_key": "k"}
     assert _connection({}, None, "local", tmp_path) == {"url": "http://127.0.0.1:2", "api_key": "local-secret"}
     assert _connection({}, None, "pgvector", "postgres://h/db") is None
+    # What the recall server reported settles it (Client.database, recall 0.23 or later).
+    from types import SimpleNamespace as Reported
+    assert _connection({}, None, database=Reported(backend="local", url=str(tmp_path), server="http://127.0.0.1:3")) == {"url": "http://127.0.0.1:3", "api_key": "local-secret"}
+    assert _connection({}, None, None, None, "k", Reported(backend="polign", url="https://db", server="")) == {"url": "https://db", "api_key": "k"}
+    assert _connection({}, None, database=Reported(backend="qdrant", url="http://q:6333", server="")) is None
     shared = {"POLIGN_URL": "https://db.example", "POLIGN_API_KEY": "shared"}
     assert _connection(shared, None) == {"url": "https://db.example", "api_key": "shared"}
 
