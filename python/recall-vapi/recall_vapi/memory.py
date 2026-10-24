@@ -29,6 +29,10 @@ def _connection(env: dict, local_dir: Any, backend: str | None = None, backend_u
             with open(os.path.join(database.url, "local-key")) as f:
                 return {"url": database.server, "api_key": f.read().strip() or None}
         if database.backend == "polign":
+            # The server never reports a key. One given here or in the
+            # environment is used; a key the server took from a saved setup
+            # is not known here, so pass backend_key or state= for a
+            # polign_db that requires one.
             key = backend_key or env.get("RECALL_BACKEND_KEY") or env.get("POLIGN_API_KEY") \
                 or os.environ.get("RECALL_BACKEND_KEY") or os.environ.get("POLIGN_API_KEY") or None
             return {"url": database.url, "api_key": key}
@@ -55,16 +59,12 @@ def _connection(env: dict, local_dir: Any, backend: str | None = None, backend_u
 
 
 def _recall_home() -> str:
-    """Where the recall binary keeps the local database when nothing names a
-    directory: RECALL_HOME, the old POLIGN_RECALL_HOME, a setup saved in the
-    old default, else ~/.local/share/recall."""
-    for var in ("RECALL_HOME", "POLIGN_RECALL_HOME"):
-        if os.environ.get(var):
-            return os.environ[var]
-    old = os.path.join(os.path.expanduser("~"), ".config", "polign", "recall")
-    if os.path.exists(os.path.join(old, "config.json")):
-        return old
-    return os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share"), "recall")
+    """Where a recall binary older than 0.23 keeps the local database when
+    nothing names a directory, the same rule polign_recall applies when it
+    runs `recall setup -local` for such a binary. A 0.23 binary reports the
+    directory itself (Client.database), so this is not consulted for it."""
+    return os.environ.get("RECALL_HOME") or os.environ.get("POLIGN_RECALL_HOME") \
+        or os.path.join(os.path.expanduser("~"), ".config", "polign", "recall")
 
 
 class RecallMemory:

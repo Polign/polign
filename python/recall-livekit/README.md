@@ -94,7 +94,7 @@ instead:
 
 ```python
 RecallMemory.open(
-    backend="polign", backend_url="http://memory.internal:23000", backend_key=os.environ["POLIGN_KEY"],
+    backend="polign", backend_url="http://memory.internal:23000", backend_key=os.environ["RECALL_BACKEND_KEY"],
     predicates=VOICE_REGISTRY,
 )
 ```

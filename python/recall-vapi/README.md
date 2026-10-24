@@ -50,7 +50,9 @@ Use `backend="polign", backend_url="https://...", backend_key="..."` instead
 of `local_dir` for a shared Polign server, the same three names as `recall
 -backend`, `-url` and `-key`. S3/GCS configuration belongs on that server,
 exactly as in the LiveKit integration. Call state needs a polign_db, so with
-another backend pass `state=` yourself. Pass `predicates="callers.json"`
+another backend pass `state=` yourself. The adapter learns the polign_db's
+address from the Recall server but never its key; for a server that requires
+one, give `backend_key` (or `RECALL_BACKEND_KEY`) or `state=`. Pass `predicates="callers.json"`
 to use your own closed predicate registry.
 
 ## Vapi configuration

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "recall-vapi"
-version = "0.2.1"
+version = "0.3.0"
 description = "Typed, correctable caller memory for Vapi, backed by Recall by Polign"
 readme = "README.md"
 license = "Apache-2.0"

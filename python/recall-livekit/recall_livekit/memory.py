@@ -98,8 +98,10 @@ class RecallMemory:
         """
         if local_dir is not None and (url is not None or api_key is not None):
             raise ValueError("local_dir runs its own server; do not pass url or api_key with it")
-        if url is not None and (backend is not None or backend_url is not None):
-            raise ValueError("url names a polign_db server; with backend or backend_url, name it there instead")
+        if (url is not None or api_key is not None) and (backend is not None or backend_url is not None or backend_key is not None):
+            raise ValueError("url and api_key name a polign_db server; with backend, backend_url or backend_key, name it there instead")
+        if local_dir is not None and backend_key is not None:
+            raise ValueError("local_dir runs its own server with its own key; do not pass backend_key with it")
         merged = dict(env or {})
         if url is not None:
             # A polign_db, in the names recall 0.23 reads and the ones before

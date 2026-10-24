@@ -3,7 +3,7 @@ name: recall
 description: Recall agent memory server (recall serve) on the vector store you already run
 type: application
 version: 0.4.0
-appVersion: "0.18.0"
+appVersion: "0.23.0"
 kubeVersion: ">=1.30.0-0"
 home: https://polign.com/recall
 icon: https://polign.com/assets/favicon.svg
@@ -20,7 +20,7 @@ annotations:
   artifacthub.io/prerelease: "true"
   artifacthub.io/images: |
     - name: recall
-      image: ghcr.io/polign/recall:0.18.0
+      image: ghcr.io/polign/recall:0.23.0
   artifacthub.io/links: |
     - name: Chart documentation
       url: https://github.com/Polign/polign/blob/main/charts/recall/README.md

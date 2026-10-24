@@ -90,6 +90,8 @@ class RecallResume:
         database = {"backend": backend, "backend_url": backend_url, "backend_key": backend_key}
         if client is not None and (local_dir is not None or env is not None or any(v is not None for v in database.values())):
             raise ValueError("local_dir, env, backend, backend_url and backend_key open a client; do not pass them with client")
+        if local_dir is not None and (backend not in (None, "local") or backend_url is not None or backend_key is not None):
+            raise ValueError("local_dir keeps the records in the local backend; do not pass backend, backend_url or backend_key with it")
         self.agent_id = agent_id
         self._client = client
         self._owns_client = client is None

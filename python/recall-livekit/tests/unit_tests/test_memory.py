@@ -183,3 +183,7 @@ def test_local_dir_excludes_a_remote_connection(tmp_path):
         RecallMemory.open(local_dir=tmp_path, url="http://memory.internal:23000")
     with pytest.raises(ValueError):
         RecallMemory.open(url="http://memory.internal:23000", backend="qdrant")
+    with pytest.raises(ValueError):
+        RecallMemory.open(api_key="k", backend_url="http://q:6333")
+    with pytest.raises(ValueError):
+        RecallMemory.open(local_dir=tmp_path, backend_key="k")

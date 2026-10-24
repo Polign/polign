@@ -1,11 +1,23 @@
 # Recall Helm chart 0.4.0
 
+Requires recall 0.23.0 or newer, the default image: the `pgvector` and
+`mongodb` kinds and query options on `backend.url` need it.
+
 - `backend.kind` accepts `pgvector` and `mongodb` beside `polign` and
   `qdrant`; `backend.url` is the database in that backend's own form, with
   options on the query string.
 - The backend credential is mounted as `RECALL_BACKEND_KEY`, the name recall
   0.23.0 reads, and under the name earlier images read (`POLIGN_API_KEY`,
   `QDRANT_API_KEY`, `PGPASSWORD`, `MONGODB_PASSWORD`), so either image works.
+
+# Recall Helm chart 0.3.0
+
+Default image ghcr.io/polign/recall 0.18.0.
+
+- The image serves the text-only tools by default; set `extractModel` so the
+  server works out the facts.
+- `typed` serves the typed tools over the registry, as earlier releases did
+  by default.
 
 # Recall Helm chart 0.2.0
 
