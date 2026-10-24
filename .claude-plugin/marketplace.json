@@ -18,7 +18,7 @@
       "name": "recall",
       "source": "./plugins/recall",
       "description": "Typed agent memory with corrections and history, powered by Recall.",
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   ]
 }
