@@ -13,9 +13,10 @@ if [ -e "$recall_home/launch" ]; then
   exit 1
 fi
 
-# No saved setup: run the recall binary directly, connecting to POLIGN_URL
-# (default http://localhost:23000). Known install locations are searched as
-# well as PATH, so an obsolete binary cannot shadow a working one.
+# No saved setup: run the recall binary directly. It keeps memory where
+# RECALL_BACKEND and RECALL_BACKEND_URL say, or in a local database it runs
+# itself when nothing is set. Known install locations are searched as well as
+# PATH, so an obsolete binary cannot shadow a working one.
 for recall_bin in "${RECALL_BIN:-}" "$(command -v recall 2>/dev/null || true)" /opt/homebrew/bin/recall /usr/local/bin/recall "$HOME/.local/bin/recall"; do
   [ -n "$recall_bin" ] && [ -x "$recall_bin" ] || continue
   # Redirect stdin: this probe inherits Claude's JSON-RPC channel, and a

@@ -25,7 +25,8 @@ def test_open_passes_connection_through_env(monkeypatch, tmp_path):
     script.write_text(
         "import json, os, sys\n"
         f"open({str(seen)!r}, 'w').write(json.dumps({{k: os.environ.get(k) for k in "
-        "('POLIGN_URL', 'POLIGN_API_KEY', 'POLIGN_COLLECTION', 'POLIGN_PREDICATES')}))\n"
+        "('RECALL_BACKEND', 'RECALL_BACKEND_URL', 'RECALL_BACKEND_KEY', 'RECALL_COLLECTION', 'RECALL_PREDICATES', "
+        "'POLIGN_URL', 'POLIGN_API_KEY', 'POLIGN_COLLECTION', 'POLIGN_PREDICATES')}))\n"
         "for line in sys.stdin:\n"
         "    r = json.loads(line)\n"
         "    if 'id' in r:\n"
@@ -43,6 +44,11 @@ def test_open_passes_connection_through_env(monkeypatch, tmp_path):
     import json
 
     assert json.loads(seen.read_text()) == {
+        "RECALL_BACKEND": "polign",
+        "RECALL_BACKEND_URL": "http://memory.internal:23000",
+        "RECALL_BACKEND_KEY": "plgn_test",
+        "RECALL_COLLECTION": "callers",
+        "RECALL_PREDICATES": "/etc/callers.json",
         "POLIGN_URL": "http://memory.internal:23000",
         "POLIGN_API_KEY": "plgn_test",
         "POLIGN_COLLECTION": "callers",
@@ -164,9 +170,16 @@ def test_local_dir_is_handed_to_the_client(monkeypatch, tmp_path):
     with RecallMemory.open(local_dir=tmp_path / "recall-data", predicates="/etc/callers.json"):
         pass
     assert seen["local_dir"] == tmp_path / "recall-data"
-    assert seen["env"] == {"POLIGN_PREDICATES": "/etc/callers.json"}
+    assert seen["env"] == {"RECALL_PREDICATES": "/etc/callers.json", "POLIGN_PREDICATES": "/etc/callers.json"}
+    seen.clear()
+    with RecallMemory.open(backend="qdrant", backend_url="http://q:6333", backend_key="qk"):
+        pass
+    assert (seen["backend"], seen["backend_url"], seen["backend_key"]) == ("qdrant", "http://q:6333", "qk")
+    assert seen["env"] == {}
 
 
 def test_local_dir_excludes_a_remote_connection(tmp_path):
     with pytest.raises(ValueError):
         RecallMemory.open(local_dir=tmp_path, url="http://memory.internal:23000")
+    with pytest.raises(ValueError):
+        RecallMemory.open(url="http://memory.internal:23000", backend="qdrant")

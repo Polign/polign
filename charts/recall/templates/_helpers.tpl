@@ -23,7 +23,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}
 {{- end -}}
 {{- end }}
-{{/* recall.keyEnv is the environment variable the backend driver reads its key from. */}}
+{{/* recall.keyEnv is the variable the backend read its key from before recall 0.23.0 (RECALL_BACKEND_KEY since). */}}
 {{- define "recall.keyEnv" -}}
-{{- if eq .Values.backend.kind "qdrant" -}}QDRANT_API_KEY{{- else -}}POLIGN_API_KEY{{- end -}}
+{{- if eq .Values.backend.kind "qdrant" -}}QDRANT_API_KEY{{- else if eq .Values.backend.kind "pgvector" -}}PGPASSWORD{{- else if eq .Values.backend.kind "mongodb" -}}MONGODB_PASSWORD{{- else -}}POLIGN_API_KEY{{- end -}}
 {{- end }}

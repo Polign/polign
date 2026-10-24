@@ -109,7 +109,7 @@ The server needs an extraction model to work out the facts in the text and to
 next run still sees it, and nothing replaces anything; the tool tells the model
 `Kept as written.` A text client given a `subject` is refused, so two users can
 never share one memory by mistake. To serve many users with the text tools,
-give each one their own collection (`env={"POLIGN_COLLECTION": ...}`) and
+give each one their own collection (`env={"RECALL_COLLECTION": ...}`) and
 client; with many users, the typed tools are the simpler choice.
 
 ## Where the memory is stored
@@ -180,7 +180,7 @@ JSON and point the server at it:
 ```
 
 ```python
-recall = Client(local_dir="./recall-data", env={"POLIGN_PREDICATES": "registry.json"}, typed=True)
+recall = Client(local_dir="./recall-data", env={"RECALL_PREDICATES": "registry.json"}, typed=True)
 ```
 
 `single` means a newer value replaces the old one; `multi` means each value is

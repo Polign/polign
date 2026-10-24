@@ -21,7 +21,7 @@ for invalid in [
     {},
     # A server nobody can call.
     {'backend': BACKEND},
-    {'backend': {'url': 'http://x', 'kind': 'pgvector'}, 'auth': {'keysFile': {'existingSecret': 'k'}}},
+    {'backend': {'url': 'http://x', 'kind': 'redis'}, 'auth': {'keysFile': {'existingSecret': 'k'}}},
     {'backend': {'kind': 'polign'}, 'auth': {'keysFile': {'existingSecret': 'k'}}},
     {'backend': BACKEND, 'auth': {'bootstrapKey': {'existingSecret': 'a'}}, 'serviceAccount': {'create': False}},
 ]:
@@ -43,6 +43,8 @@ assert '-bootstrap-key-file=/auth/key' in args and '-kubernetes' not in args
 assert args[:3] == ['-backend=polign', '-url=http://polign.polign.svc:23000', 'serve']
 env = {e['name']: e for e in pod['containers'][0]['env']}
 assert env['POLIGN_API_KEY']['valueFrom']['secretKeyRef'] == {'name': 'polign-key', 'key': 'api-key'}
+# The name recall 0.23 reads, beside the one earlier images read.
+assert env['RECALL_BACKEND_KEY']['valueFrom']['secretKeyRef'] == {'name': 'polign-key', 'key': 'api-key'}
 assert pod['containers'][0]['securityContext']['readOnlyRootFilesystem'] is True
 assert pod['securityContext']['runAsNonRoot'] is True
 
@@ -84,7 +86,15 @@ assert '-kubernetes-sandbox-claims' in args and not any(a.startswith('-kubernete
 docs = render({'backend': {'kind': 'qdrant', 'url': 'http://qdrant:6333', 'existingSecret': 'qk'}, 'auth': {'keysFile': {'existingSecret': 'keys'}}})
 pod = by_kind(docs, 'Deployment')[0]['spec']['template']['spec']
 env = {e['name']: e for e in pod['containers'][0]['env']}
-assert 'QDRANT_API_KEY' in env and 'POLIGN_API_KEY' not in env
+assert 'QDRANT_API_KEY' in env and 'RECALL_BACKEND_KEY' in env and 'POLIGN_API_KEY' not in env
+
+# PostgreSQL and MongoDB are backends too; the URL is passed as it is, options included.
+docs = render({'backend': {'kind': 'pgvector', 'url': 'postgres://recall@db/recall?schema=memory', 'existingSecret': 'pg'}, 'auth': {'keysFile': {'existingSecret': 'keys'}}})
+pod = by_kind(docs, 'Deployment')[0]['spec']['template']['spec']
+assert '-url=postgres://recall@db/recall?schema=memory' in pod['containers'][0]['args']
+env = {e['name']: e for e in pod['containers'][0]['env']}
+assert 'PGPASSWORD' in env and 'RECALL_BACKEND_KEY' in env
+render({'backend': {'kind': 'mongodb', 'url': 'mongodb://db/recall'}, 'auth': {'keysFile': {'existingSecret': 'keys'}}})
 assert '-keys-file=/keys/keys' in pod['containers'][0]['args']
 assert any(v['name'] == 'keys-file' and v['secret']['defaultMode'] == 0o400 for v in pod['volumes'])
 

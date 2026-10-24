@@ -61,8 +61,12 @@ class RecallResume:
     settled. ``resolver`` checks the external ones (see ``durable``).
 
     ``client`` is a ``polign_recall.Client`` opened with ``agent=True``. When
-    it is left out, one is opened with ``local_dir`` and ``env`` and closed on
-    release. Release on a clean shutdown (``release``, ``arelease``, or a
+    it is left out, one is opened with ``backend``, ``backend_url`` and
+    ``backend_key`` (the same three names as ``recall -backend``, ``-url`` and
+    ``-key``; ``local_dir`` is the short spelling of a local directory) and
+    ``env``, and closed on release. With none of them the ``recall`` binary
+    resolves the database: the environment, the saved setup, or a local
+    database it runs itself. Release on a clean shutdown (``release``, ``arelease``, or a
     ``with`` block) so the next process can resume at once instead of waiting
     for the lease to expire.
     """
@@ -79,13 +83,18 @@ class RecallResume:
         local_dir: str | os.PathLike[str] | None = None,
         env: Mapping[str, str] | None = None,
         resolver: Resolver | None = None,
+        backend: str | None = None,
+        backend_url: str | os.PathLike[str] | None = None,
+        backend_key: str | None = None,
     ) -> None:
-        if client is not None and (local_dir is not None or env is not None):
-            raise ValueError("local_dir and env open a client; do not pass them with client")
+        database = {"backend": backend, "backend_url": backend_url, "backend_key": backend_key}
+        if client is not None and (local_dir is not None or env is not None or any(v is not None for v in database.values())):
+            raise ValueError("local_dir, env, backend, backend_url and backend_key open a client; do not pass them with client")
         self.agent_id = agent_id
         self._client = client
         self._owns_client = client is None
         self._client_options: dict[str, Any] = {"local_dir": local_dir, "env": env}
+        self._client_options.update({k: v for k, v in database.items() if v is not None})
         self._resume_options: dict[str, Any] = {
             "token_budget": token_budget,
             "lease_ttl": lease_ttl,

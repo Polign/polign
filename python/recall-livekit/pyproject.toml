@@ -21,7 +21,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "polign-recall>=0.18.0",
+    "polign-recall>=0.23.0",
     "livekit-agents>=1.8,<2",
 ]
 

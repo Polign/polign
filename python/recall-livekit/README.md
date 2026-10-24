@@ -94,11 +94,17 @@ instead:
 
 ```python
 RecallMemory.open(
-    url="http://memory.internal:23000",   # or POLIGN_URL in the environment
-    api_key=os.environ["POLIGN_API_KEY"],
+    backend="polign", backend_url="http://memory.internal:23000", backend_key=os.environ["POLIGN_KEY"],
     predicates=VOICE_REGISTRY,
 )
 ```
+
+The same three names, `backend`, `backend_url` and `backend_key`, reach
+PostgreSQL with pgvector (`backend="pgvector"`, a `postgres://` URL), MongoDB
+and Qdrant, as `recall -backend`, `-url` and `-key` do. With none of them and
+no `local_dir`, the `recall` binary resolves the database: `RECALL_BACKEND`
+and `RECALL_BACKEND_URL` in the worker's environment, then what `recall
+setup` saved, then a local database in `~/.local/share/recall`.
 
 For S3, run the server with `-store s3://your-bucket/recall-livekit` and give
 that server an AWS identity with access to the bucket. The worker connects
@@ -187,8 +193,10 @@ does not resume; use `RecallAgent` for that. Needs a `polign` CLI newer than
 
 | Where | Option | Default | What it does |
 |---|---|---|---|
-| `RecallMemory.open` | `local_dir` | none | Keep the database in this directory and run its server; exclusive with `url` and `api_key` |
-| `RecallMemory.open` | `url`, `api_key`, `collection`, `predicates` | worker environment | Connection for the subprocess (`POLIGN_URL`, `POLIGN_API_KEY`, `POLIGN_COLLECTION`, `POLIGN_PREDICATES`) |
+| `RecallMemory.open` | `backend`, `backend_url`, `backend_key` | what the `recall` binary resolves | Where memory lives, the same three names as `recall -backend`, `-url` and `-key` |
+| `RecallMemory.open` | `local_dir` | none | Keep the database in this directory and run its server; the short spelling of `backend="local", backend_url=...`; exclusive with `url` and `api_key` |
+| `RecallMemory.open` | `url`, `api_key` | worker environment | A polign_db server, as before the three names existed |
+| `RecallMemory.open` | `collection`, `predicates` | worker environment | `RECALL_COLLECTION` and `RECALL_PREDICATES` for the subprocess |
 | `RecallMemory.open` | `command` | `polign mcp -memory-only -write` | The subprocess argv, to run a `polign` binary other than the one pip installed |
 | `RecallMemory.open` | `agent` | off | Turn on the agent resume tools that `resume` needs (adds `-agent` to the default argv) |
 | `for_subject` | `limit` | 20 | Beliefs loaded into the prompt; above it, per-turn search kicks in |

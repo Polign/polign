@@ -46,9 +46,11 @@ app.include_router(create_router(adapter, token=webhook_token))
 
 `your_customer_directory`, the base assistant, token, and FastAPI application
 above are supplied by your application. The example supplies all of them.
-Use `env={"POLIGN_URL": "https://...", "POLIGN_API_KEY": "..."}` instead of
-`local_dir` for a shared Polign server. S3/GCS configuration belongs on that
-server, exactly as in the LiveKit integration. Pass `predicates="callers.json"`
+Use `backend="polign", backend_url="https://...", backend_key="..."` instead
+of `local_dir` for a shared Polign server, the same three names as `recall
+-backend`, `-url` and `-key`. S3/GCS configuration belongs on that server,
+exactly as in the LiveKit integration. Call state needs a polign_db, so with
+another backend pass `state=` yourself. Pass `predicates="callers.json"`
 to use your own closed predicate registry.
 
 ## Vapi configuration
@@ -115,7 +117,7 @@ Recall is the only store. Call bindings and the tool ledger are records in a
 `vapi_calls` collection on the same Polign server as the memory, so every
 worker and host that shares the memory shares them, and one backup and
 retention policy covers both. `RecallMemory.open` records where that server
-is (the managed local database, or `POLIGN_URL`), and the adapter uses it
+is (the managed local database, or the polign_db named with `backend_url`), and the adapter uses it
 unless you pass `state=`. Rename the collection with
 `state=PolignState.for_memory(memory, collection="...")`.
 

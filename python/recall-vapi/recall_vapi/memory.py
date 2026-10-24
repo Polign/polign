@@ -14,18 +14,43 @@ from polign_recall import Client, RememberResult
 VOICE_REGISTRY = str(resources.files(__package__).joinpath("registry_voice.json"))
 
 
-def _connection(env: dict, local_dir: Any) -> dict[str, str | None]:
-    """Where the Recall client's server is, in the terms polign.Client takes."""
-    if local_dir is not None:
+def _connection(env: dict, local_dir: Any, backend: str | None = None, backend_url: Any = None,
+                backend_key: str | None = None) -> dict[str, str | None] | None:
+    """Where the Recall client's polign_db server is, in the terms
+    polign.Client takes, or None when memory is in a backend that is not a
+    polign_db (call state then needs ``state=``)."""
+    if local_dir is not None or backend == "local":
         # Recall's managed local server leaves these behind when it starts.
-        directory = os.fspath(local_dir)
+        directory = local_dir if local_dir is not None else backend_url
+        if directory is None:
+            directory = _recall_home()
+        directory = os.fspath(directory)
         with open(os.path.join(directory, "runtime.json")) as f:
             url = json.load(f)["url"]
         with open(os.path.join(directory, "local-key")) as f:
             return {"url": url, "api_key": f.read().strip() or None}
-    url = env.get("POLIGN_URL") or os.environ.get("POLIGN_URL") or "http://localhost:23000"
-    key = env.get("POLIGN_API_KEY", os.environ.get("POLIGN_API_KEY")) or None
+    if backend == "polign":
+        return {"url": os.fspath(backend_url) if backend_url is not None else "http://localhost:23000", "api_key": backend_key}
+    if backend is not None or backend_url is not None:
+        return None
+    url = (env.get("RECALL_BACKEND_URL") or env.get("POLIGN_URL") or os.environ.get("RECALL_BACKEND_URL")
+           or os.environ.get("POLIGN_URL") or "http://localhost:23000")
+    key = env.get("RECALL_BACKEND_KEY") or env.get("POLIGN_API_KEY") or os.environ.get("RECALL_BACKEND_KEY") \
+        or os.environ.get("POLIGN_API_KEY") or None
     return {"url": url, "api_key": key}
+
+
+def _recall_home() -> str:
+    """Where the recall binary keeps the local database when nothing names a
+    directory: RECALL_HOME, the old POLIGN_RECALL_HOME, a setup saved in the
+    old default, else ~/.local/share/recall."""
+    for var in ("RECALL_HOME", "POLIGN_RECALL_HOME"):
+        if os.environ.get(var):
+            return os.environ[var]
+    old = os.path.join(os.path.expanduser("~"), ".config", "polign", "recall")
+    if os.path.exists(os.path.join(old, "config.json")):
+        return old
+    return os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share"), "recall")
 
 
 class RecallMemory:
@@ -42,14 +67,17 @@ class RecallMemory:
 
     @classmethod
     def open(cls, *, predicates: str = VOICE_REGISTRY, **client_options: Any) -> RecallMemory:
-        """Accept Client options, including local_dir, env, command, and timeout."""
+        """Accept Client options: backend, backend_url and backend_key (the
+        same three names as recall -backend, -url and -key), local_dir, env,
+        command and timeout."""
         env = dict(client_options.pop("env", None) or {})
-        env["POLIGN_PREDICATES"] = predicates
+        env["RECALL_PREDICATES"] = env["POLIGN_PREDICATES"] = predicates
         # The voice registry is typed, so the typed tools are asked for.
         client_options.setdefault("typed", True)
         client = Client(env=env, **client_options)
         try:
-            return cls(client, connection=_connection(env, client_options.get("local_dir")))
+            return cls(client, connection=_connection(env, client_options.get("local_dir"), client_options.get("backend"),
+                                                      client_options.get("backend_url"), client_options.get("backend_key")))
         except BaseException:
             client.close()
             raise

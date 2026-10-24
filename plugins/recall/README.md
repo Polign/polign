@@ -48,7 +48,8 @@ Setup starts a private database on your computer, checks that memory reads and
 the MCP tools work, and installs this plugin into Claude. Restart Claude Code,
 then try the memory prompts above. The database starts again by itself the
 next time Claude connects, and your memories stay in
-`~/.config/polign/recall/data`.
+`~/.local/share/recall/data` (a setup made before recall 0.23 stays in
+`~/.config/polign/recall`).
 
 If you already have Recall running against a database, keep it: see
 [connection settings](docs/setup.md#connect-to-an-existing-database).

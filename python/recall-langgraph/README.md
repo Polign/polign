@@ -209,8 +209,9 @@ and `resume.set_pointer`, and `resume.agent` is the underlying
 | Option | Default | What it does |
 |---|---|---|
 | `client` | none | A `polign_recall.Client` opened with `agent=True`, to share one subprocess. Without it, `RecallResume` opens its own and closes it on release. |
-| `local_dir` | none | Keep the database in this directory and run its server (only when `RecallResume` opens its own client) |
-| `env` | process environment | `POLIGN_URL`, `POLIGN_API_KEY` and the rest, for a server you run yourself |
+| `backend`, `backend_url`, `backend_key` | what the `recall` binary resolves: the environment, the saved setup, or a local database it runs itself | Where the records live, the same three names as `recall -backend`, `-url` and `-key` (only when `RecallResume` opens its own client) |
+| `local_dir` | none | Keep the database in this directory and run its server; the short spelling of `backend="local", backend_url=...` |
+| `env` | process environment | Extra environment for the subprocess, such as `RECALL_COLLECTION` |
 | `token_budget` | 8000 | Bound on the briefing, in tokens |
 | `lease_ttl` | 60 | Seconds each lease epoch lasts; renewed in the background |
 | `holder` | host, pid and a random suffix | Names this process in lease records |
@@ -234,17 +235,20 @@ changes what the model sees, never what was recorded.
 
 `local_dir="./recall-data"` keeps the database on this machine; the first
 process to open the directory starts a `polign-server` for it in the
-background, and later ones share it. Agents that move between machines need
-one shared server: run `polign-server` where they can all reach it
+background, and later ones share it. With no database named at all, the
+`recall` binary keeps the records in `~/.local/share/recall`, the local
+database every agent on the machine shares. Agents that move between machines
+need one shared server: run `polign-server` where they can all reach it
 ([Get started](https://polign.com/developers.html) shows how, including
-storing into S3, GCS or Azure) and pass its address through `env` or the
-environment:
+storing into S3, GCS or Azure), or use PostgreSQL, MongoDB or Qdrant, and name
+it:
 
 ```python
 RecallResume(
     "billing-migrator",
-    env={"POLIGN_URL": "http://memory.internal:23000", "POLIGN_API_KEY": key},
+    backend="polign", backend_url="http://memory.internal:23000", backend_key=key,
 )
+RecallResume("billing-migrator", backend="pgvector", backend_url="postgres://recall:pw@db.internal/recall")
 ```
 
 The agent's records live in their own collection next to the memory

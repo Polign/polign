@@ -1,8 +1,8 @@
 {{- if not .Values.backend.url -}}
 {{- fail "Set backend.url to the vector store recall serve should use, such as http://polign.polign.svc:23000" -}}
 {{- end -}}
-{{- if not (has .Values.backend.kind (list "polign" "qdrant")) -}}
-{{- fail "backend.kind must be polign or qdrant" -}}
+{{- if not (has .Values.backend.kind (list "polign" "pgvector" "mongodb" "qdrant")) -}}
+{{- fail "backend.kind must be polign, pgvector, mongodb or qdrant" -}}
 {{- end -}}
 {{- if and (not .Values.auth.bootstrapKey.existingSecret) (not .Values.auth.keysFile.existingSecret) (not .Values.kubernetes.enabled) -}}
 {{- fail "Nobody could call this server: set auth.bootstrapKey.existingSecret (an admin key that mints keys over HTTP), auth.keysFile.existingSecret (static keys), or kubernetes.enabled=true (workload token exchange)" -}}
@@ -103,6 +103,12 @@ spec:
               drop: [ALL]
           env:
             {{- if .Values.backend.existingSecret }}
+            - name: RECALL_BACKEND_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.backend.existingSecret }}
+                  key: {{ .Values.backend.secretKey }}
+            # The name recall read before 0.23.0, for an older image.
             - name: {{ include "recall.keyEnv" . }}
               valueFrom:
                 secretKeyRef:

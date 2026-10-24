@@ -10,12 +10,18 @@ imagePullSecrets: []
 
 backend:
   # polign (recommended: bucket-native, leases for the resume tools, lexical
-  # search, cached reads) or qdrant (vector search only, no resume tools).
+  # search, cached reads), pgvector, mongodb, or qdrant (vector search only,
+  # no resume tools). The same as recall -backend.
   kind: polign
-  # Required. The backend's URL from inside the cluster, such as
-  # http://polign.polign.svc:23000 for the polign chart's Service.
+  # Required. The backend's URL from inside the cluster, in the backend's own
+  # form: http://polign.polign.svc:23000 for the polign chart's Service,
+  # postgres://user@host/db for pgvector, mongodb://host/db for mongodb,
+  # http://qdrant:6333 for qdrant. Options go on the query string, such as
+  # ?schema=memory. The same as recall -url.
   url: ""
-  # Secret holding the backend's API key. For polign this is a key that reaches
+  # Secret holding the backend's credential, mounted as RECALL_BACKEND_KEY
+  # (recall -key): the API key of polign and qdrant, the password of pgvector
+  # and mongodb when the URL has none. For polign this is a key that reaches
   # every namespace (unscoped); recall serve scopes callers itself.
   existingSecret: ""
   secretKey: api-key

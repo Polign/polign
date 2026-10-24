@@ -10,18 +10,21 @@ manual plugin installation to a server on port 23100, set its address before
 starting Claude:
 
 ```sh
-export POLIGN_URL=http://127.0.0.1:23100
-export POLIGN_COLLECTION=recall_dogfood
+export RECALL_BACKEND=polign
+export RECALL_BACKEND_URL=http://127.0.0.1:23100
+export RECALL_COLLECTION=recall_dogfood
 claude
 ```
 
-Use your own address and collection name. A collection is a named group of
-memories in the database. The default is `recall_lexical_v1`. Changing the
-connection or collection does not copy your existing memories into it.
-
-For a server that requires authentication, also set `POLIGN_API_KEY` to the key
-provided by its operator. `POLIGN_PREDICATES` selects a custom memory registry
-JSON file. Keep these environment settings in the terminal that starts Claude.
+The same three variables name any backend: `RECALL_BACKEND` is `polign`,
+`pgvector`, `mongodb` or `qdrant`, `RECALL_BACKEND_URL` is the database in
+that backend's own form, and `RECALL_BACKEND_KEY` is the credential when the
+URL does not carry one. A collection is a named group of memories in the
+database. The default is `recall_lexical_v1`. Changing the connection or
+collection does not copy your existing memories into it. `RECALL_PREDICATES`
+selects a custom memory registry JSON file. Keep these environment settings in
+the terminal that starts Claude. The names used before recall 0.23
+(`POLIGN_URL`, `POLIGN_API_KEY`, `POLIGN_COLLECTION`) still work.
 
 If you have run `recall setup`, its saved configuration takes precedence over
 these environment variables. Change it with the command below.
@@ -46,13 +49,15 @@ polign-server -store "fs:$HOME/.local/share/recall/another-database" \
   -http 127.0.0.1:23100 -grpc 127.0.0.1:23101
 ```
 
-Then set `POLIGN_URL=http://127.0.0.1:23100` in the terminal that starts Claude.
+Then set `RECALL_BACKEND=polign` and `RECALL_BACKEND_URL=http://127.0.0.1:23100`
+in the terminal that starts Claude.
 Both ports must be free. This example creates a separate database; it does not
 move memories from your original one.
 
 Without a saved setup, the plugin looks for `recall` on PATH and in common
-installation locations, and falls back to the `polign mcp` server of polign_db
-0.13 and earlier. A saved setup pins the executable path. If the saved launcher exists but cannot run, fix its permissions or rerun
+installation locations and runs `recall mcp -write`, which with nothing else
+set keeps memory in a local database in `~/.local/share/recall`; it falls back
+to the `polign mcp` server of polign_db 0.13 and earlier. A saved setup pins the executable path. If the saved launcher exists but cannot run, fix its permissions or rerun
 setup; the plugin reports the problem instead of selecting another database.
 
 ## Setup
@@ -65,13 +70,16 @@ memories.
 For an existing database:
 
 ```sh
-recall setup -url http://127.0.0.1:23100 -collection recall_dogfood
+recall setup -backend polign -url http://127.0.0.1:23100 -collection recall_dogfood
+recall setup -backend qdrant -url http://localhost:6333
 ```
 
-Set `POLIGN_API_KEY` before setup if that server requires a key. On the first
-run, setup also reads `POLIGN_URL`, `POLIGN_COLLECTION`, and `POLIGN_PREDICATES`.
-Later runs preserve the saved connection. Use `-url` and `-collection` to change
-it, or `-local` to use the managed local database.
+Pass `-key` or set `RECALL_BACKEND_KEY` before setup if that database requires
+a credential the URL does not carry. On the first run, setup also reads
+`RECALL_BACKEND`, `RECALL_BACKEND_URL`, `RECALL_COLLECTION` and
+`RECALL_PREDICATES`. Later runs preserve the saved connection. Use `-backend`,
+`-url` and `-collection` to change it, or `-local` to use the managed local
+database.
 
 The local database runs `polign-server`. Setup uses the one installed beside
 `recall`, then the first on PATH; pass `-server` to choose another.
@@ -80,14 +88,15 @@ The local database runs `polign-server`. Setup uses the one installed beside
 
 | Item | Location |
 | --- | --- |
-| Connection settings and launcher | `~/.config/polign/recall/` |
-| Managed local database | `~/.config/polign/recall/data/` |
-| Local server logs | `~/.config/polign/recall/server.log` |
+| Connection settings and launcher | `~/.local/share/recall/` |
+| Managed local database | `~/.local/share/recall/data/` |
+| Local server logs | `~/.local/share/recall/server.log` |
 
-These files stay outside Claude's plugin cache, so updating the plugin does not
-remove them. Settings and the local API key are readable only by your user.
-The launcher saves the `recall` binary's absolute path to avoid selecting another version
-when PATH changes. For another configuration directory, set `POLIGN_RECALL_HOME`
+A setup made before recall 0.23 lives in `~/.config/polign/recall/` and stays
+there. These files stay outside Claude's plugin cache, so updating the plugin
+does not remove them. Settings and the local API key are readable only by your
+user. The launcher saves the `recall` binary's absolute path to avoid selecting
+another version when PATH changes. For another directory, set `RECALL_HOME`
 before both setup and Claude.
 
 The managed server runs in the background, listens only on your computer, and
@@ -100,8 +109,10 @@ To check a saved setup:
 recall doctor
 ```
 
-Doctor checks the executable, database access, and MCP handshake and tools.
-It does not start a stopped server or write memories. After fixing a cached
+Doctor says which database the flags, the environment and the saved setup
+resolve to and where that came from, then checks the connection, a memory
+read, and the MCP handshake and tools. It starts a stopped local database
+and writes no memories. After fixing a cached
 connection failure, restart Claude and check `/mcp`.
 
 ## Other MCP hosts and custom memory types

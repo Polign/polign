@@ -56,4 +56,5 @@ uses this mode.
 - A deleted pod's key stays valid until its TTL (15 minutes) unless revoked
   through `/v1/keys`.
 - Keys cannot be rotated in flight; a workload exchanges a new one.
-- The resume tools need a backend with leases: polign_db, not Qdrant.
+- The resume tools need a backend with leases: polign_db, PostgreSQL or
+  MongoDB, not Qdrant.

@@ -69,18 +69,26 @@ class RecallMemory:
         timeout: float = 30.0,
         write: bool = True,
         agent: bool = False,
+        backend: str | None = None,
+        backend_url: str | os.PathLike[str] | None = None,
+        backend_key: str | None = None,
     ) -> RecallMemory:
         """Start the Recall subprocess and read its predicate registry.
 
-        ``local_dir`` keeps the database on this machine, in that directory:
-        the first worker process to open it starts a background
-        ``polign-server`` and the others share it. Use ``url`` and ``api_key``
-        instead for a server you run yourself; the two are exclusive.
+        ``backend``, ``backend_url`` and ``backend_key`` say where memory
+        lives, the same three names as ``recall -backend``, ``-url`` and
+        ``-key``: polign, pgvector, mongodb or qdrant, with the URL in that
+        backend's own form. ``local_dir`` keeps the database on this machine,
+        in that directory: the first worker process to open it starts a
+        background ``polign-server`` and the others share it. With none of
+        these, the ``recall`` binary resolves the database: the environment,
+        the saved setup, or a local database it runs itself.
 
-        ``url``, ``api_key``, ``collection`` and ``predicates`` (a registry file
-        path) become the ``POLIGN_URL``, ``POLIGN_API_KEY``, ``POLIGN_COLLECTION``
-        and ``POLIGN_PREDICATES`` variables of the subprocess; anything left
-        unset falls through to the worker's environment. ``command`` replaces
+        ``url`` and ``api_key`` name a polign_db server, as they did before
+        the three names existed. ``collection`` and ``predicates`` (a registry
+        file path) become the ``RECALL_COLLECTION`` and ``RECALL_PREDICATES``
+        variables of the subprocess; anything left unset falls through to the
+        worker's environment. ``command`` replaces
         the default ``recall mcp -write -typed`` argv; the default runs the
         ``recall`` binary that pip installed with this package. A command must
         serve the typed tools (``-typed`` from recall 0.18 on).
@@ -90,19 +98,23 @@ class RecallMemory:
         """
         if local_dir is not None and (url is not None or api_key is not None):
             raise ValueError("local_dir runs its own server; do not pass url or api_key with it")
+        if url is not None and (backend is not None or backend_url is not None):
+            raise ValueError("url names a polign_db server; with backend or backend_url, name it there instead")
         merged = dict(env or {})
-        for key, value in (
-            ("POLIGN_URL", url),
-            ("POLIGN_API_KEY", api_key),
-            ("POLIGN_COLLECTION", collection),
-            ("POLIGN_PREDICATES", predicates),
-        ):
+        if url is not None:
+            # A polign_db, in the names recall 0.23 reads and the ones before
+            # it read, so either binary finds it.
+            merged.update({"RECALL_BACKEND": "polign", "RECALL_BACKEND_URL": url, "POLIGN_URL": url})
+        if api_key is not None:
+            merged.update({"RECALL_BACKEND_KEY": api_key, "POLIGN_API_KEY": api_key})
+        for name, value in (("COLLECTION", collection), ("PREDICATES", predicates)):
             if value is not None:
-                merged[key] = value
+                merged["RECALL_" + name] = merged["POLIGN_" + name] = value
         # This package renders typed beliefs, so it asks for the typed tools;
         # a command= that serves the text tools is refused at open.
         client = Client(command=command, env=merged, timeout=timeout, write=write,
-                        local_dir=local_dir, agent=agent, typed=True)
+                        local_dir=local_dir, agent=agent, typed=True,
+                        backend=backend, backend_url=backend_url, backend_key=backend_key)
         try:
             return cls(client)
         except BaseException:
