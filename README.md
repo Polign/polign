@@ -95,6 +95,7 @@ Choose the integration that fits your application:
 | [Python client](https://github.com/Polign/recall/tree/main/python) | Read and write memories from Python through Recall's MCP server. |
 | [Vapi adapter](python/recall-vapi) | Remember callers across voice calls through authenticated webhooks and memory tools. |
 | [OpenClaw plugin](plugins/openclaw) | Make Recall the memory of OpenClaw agents: auto-recall before each turn, auto-capture after it, and memory tools. |
+| [Hermes Agent plugin](plugins/hermes) | Make Recall the memory provider of Hermes Agent: memories in front of each turn, extraction after it, and memory tools. |
 | MCP server | Give an MCP-compatible agent access to the memory tools. |
 
 With Polign v0.6.4+, an MCP host can launch:

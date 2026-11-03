@@ -1,0 +1,29 @@
+[project]
+name = "hermes-plugin-recall"
+version = "0.1.0"
+description = "Hermes Agent memory provider plugin: Recall by Polign"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Polign" }]
+# Installed into the Hermes venv by `hermes plugins install` and re-applied after
+# every `hermes update`. Hermes pins its own dependencies exactly and refuses a
+# plugin whose requirements cannot resolve against them, so keep upper bounds.
+# polign-recall ships the `recall` binary in its platform wheels and depends on
+# nothing else at runtime.
+dependencies = [
+    "polign-recall>=0.24.0,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.urls]
+Homepage = "https://polign.com/hermes"
+Documentation = "https://polign.com/docs/recall"
+Repository = "https://github.com/Polign/polign"
+Issues = "https://github.com/Polign/polign/issues"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"

@@ -1,0 +1,36 @@
+name: hermes-plugin
+
+on:
+  push:
+    branches: [main]
+    paths: ["plugins/hermes/**", ".github/workflows/hermes-plugin-ci.yml"]
+  pull_request:
+    paths: ["plugins/hermes/**", ".github/workflows/hermes-plugin-ci.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # The Hermes memory provider: unit tests over a fake Recall client with the
+    # Hermes modules stubbed, then the real `recall` binary and the local
+    # database that pip installs with polign-recall.
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.14"]
+    defaults:
+      run:
+        working-directory: plugins/hermes
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: python -m pip install -e '.[dev]'
+      - name: Unit tests
+        run: pytest tests/unit_tests -q
+      - name: Integration tests
+        run: pytest tests/integration_tests -v
