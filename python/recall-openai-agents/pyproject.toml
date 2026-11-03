@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "recall-openai-agents"
+version = "0.1.0"
+description = "Session memory for the OpenAI Agents SDK, backed by Recall by Polign"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "Polign" }]
+keywords = ["openai-agents", "agents sdk", "session", "agent memory", "recall", "polign"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: Apache Software License",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "polign-recall>=0.23.0",
+    "openai-agents>=0.3,<1",
+]
+
+[project.urls]
+Homepage = "https://polign.com"
+Documentation = "https://polign.com/docs/integrations"
+Repository = "https://github.com/Polign/polign"
+Issues = "https://github.com/Polign/polign/issues"
+
+[tool.hatch.build]
+ignore-vcs = true
+
+[tool.hatch.build.targets.sdist]
+include = ["recall_openai_agents/", "tests/", "README.md", "LICENSE"]
+exclude = ["**/__pycache__", "**/.pytest_cache"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["recall_openai_agents"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

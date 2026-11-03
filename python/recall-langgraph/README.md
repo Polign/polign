@@ -254,11 +254,55 @@ RecallResume("billing-migrator", backend="pgvector", backend_url="postgres://rec
 The agent's records live in their own collection next to the memory
 collection (`<collection>_agents`).
 
+## Checkpointer and store
+
+`RecallSaver` is a LangGraph checkpointer and `RecallStore` a LangGraph
+store, both keeping their records in Recall, for graphs that want one
+database for threads, interrupts, long-term memory and resume alike:
+
+```python
+from recall_langgraph import RecallSaver, RecallStore
+
+with RecallSaver(local_dir="./recall-data") as saver, RecallStore("memories", local_dir="./recall-data") as store:
+    graph = builder.compile(checkpointer=saver, store=store)
+    graph.invoke(state, {"configurable": {"thread_id": "ticket-42"}})
+```
+
+Both take the same `client`, `local_dir`, `backend`, `backend_url`,
+`backend_key` and `env` options as `RecallResume`, plus `lease_ttl` and
+`lease_wait` (below). They are independent of `RecallResume` and can be used
+without it.
+
+`RecallSaver` passes LangGraph's
+[checkpointer conformance suite](https://pypi.org/project/langgraph-checkpoint-conformance/)
+for `put`, `put_writes`, `get_tuple`, `list` and `delete_thread`, the base
+capabilities; the suite runs in this package's tests against a fake client
+and against a real `polign-server`. Each thread is a Recall agent named
+`lg-<thread_id>` (hashed when the id has characters Recall does not take),
+and the thread's checkpoints, metadata and pending writes are records under
+it. A write takes the thread's lease and hands it back when done, waiting up
+to `lease_wait` seconds (30 by default) for another process to finish first,
+so processes that share a thread take turns rather than interleave. Reads
+need no lease. `list(None)`, listing across every thread, is not supported;
+`delete_for_runs`, `copy_thread` and `prune` are not implemented.
+
+`RecallStore` is one Recall agent, `lgs-<name>`, with one record per
+namespace holding that namespace's items. `search` filters like
+`InMemoryStore` (equality, nested values, `$eq` `$ne` `$gt` `$gte` `$lt`
+`$lte`); a `query` ranks items by how many of its words appear in them, in
+this client, since there is no embedding index. Keep a namespace to what one
+agent or user holds: its items are one record, bounded by Recall's output
+size of 1 MiB.
+
+Records are append-only in Recall. `delete_thread` drops the thread's index,
+so nothing of it is found again, but the stored records stay in the
+database.
+
 ## Development
 
 ```bash
 cd python/recall-langgraph
-python -m pip install -e . pytest pytest-asyncio
+python -m pip install -e . pytest pytest-asyncio langgraph-checkpoint-conformance
 pytest tests/unit_tests -q                # a fake Recall client, no network
 pytest tests/integration_tests -v         # real polign-server and polign CLI
 ```
