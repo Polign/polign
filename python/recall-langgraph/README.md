@@ -307,8 +307,3 @@ pytest tests/unit_tests -q                # a fake Recall client, no network
 pytest tests/integration_tests -v         # real polign-server and polign CLI
 ```
 
-The integration tests locate the binaries like the other packages' tests do
-(`POLIGN_SERVER`, `POLIGN_SOURCE`, `POLIGN_SERVER_VERSION`, or the latest
-release download) and skip when none is found or when the CLI has no
-`polign mcp -agent`. Both suites drive real compiled graphs with a scripted
-chat model, so no model API key is needed.
