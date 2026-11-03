@@ -304,6 +304,12 @@ database.
 cd python/recall-langgraph
 python -m pip install -e . pytest pytest-asyncio langgraph-checkpoint-conformance
 pytest tests/unit_tests -q                # a fake Recall client, no network
-pytest tests/integration_tests -v         # real polign-server and polign CLI
+pytest tests/integration_tests -v         # the real recall binary and polign-server
 ```
+
+The integration tests use the `recall` binary and the `polign-server` that
+pip installs with polign-recall, each test in its own collection on one
+local database directory, and skip when the binary is missing. Both suites
+drive real compiled graphs with a scripted chat model, so no model API key
+is needed.
 
