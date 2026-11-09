@@ -19,7 +19,13 @@ ACTOR=hermes-1
 PORT=8111
 
 k() { kubectl --context "$CONTEXT" "$@"; }
-ate() { "$ATE" --context "$CONTEXT" "$@" 2> >(grep -v '^Warning: no --token-file' >&2); }
+ERR="$(mktemp)"
+ate() {
+  local rc=0
+  "$ATE" --context "$CONTEXT" "$@" 2>"$ERR" || rc=$?
+  grep -v '^Warning: no --token-file' "$ERR" >&2 || true
+  return "$rc"
+}
 say() { printf '\n== %s\n' "$*"; }
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 
@@ -31,7 +37,7 @@ stop_proxies() {
   done
   PIDS=()
 }
-trap stop_proxies EXIT
+trap 'stop_proxies; rm -f "$ERR"' EXIT
 
 if [[ "${1:-}" == "clean" ]]; then
   ate delete actor "$ACTOR" -a "$ATESPACE" >/dev/null 2>&1 || true
@@ -43,7 +49,7 @@ HERMES_AGENT_DIR="${HERMES_AGENT_DIR:?name a hermes-agent checkout}"
 k -n recall-system get deploy/recall >/dev/null 2>&1 || fail "Recall is not deployed; run deploy/agent-substrate/run-kind.sh in Polign/recall first"
 
 proxy() {
-  ate proxy actor "$ACTOR" "$PORT:80" -a "$ATESPACE" >/dev/null 2>&1 &
+  "$ATE" --context "$CONTEXT" proxy actor "$ACTOR" "$PORT:80" -a "$ATESPACE" >/dev/null 2>&1 &
   PIDS+=("$!")
   for _ in $(seq 1 60); do
     curl -s -o /dev/null -m 2 "localhost:$PORT/readyz" && return 0
