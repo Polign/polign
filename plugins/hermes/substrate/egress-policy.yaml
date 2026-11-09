@@ -1,0 +1,13 @@
+# One actor's egress policy, for `kubectl ate create egress-policy <actor> -f`.
+# On a request to Recall the gateway replaces the Authorization header with a
+# JWT minted for the actor. Add rules for the model API the agent calls.
+rules:
+- http:
+    hostnames: ["recall.recall-system.svc.cluster.local"]
+    effects:
+      replaceHeaders:
+      - header: Authorization
+        prefix: "Bearer "
+        actorJwt:
+          audiences: ["recall"]
+          expirationSeconds: 900

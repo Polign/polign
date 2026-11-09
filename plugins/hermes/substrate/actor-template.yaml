@@ -1,0 +1,27 @@
+# The ActorTemplate, for `kubectl ate create actor-template -f`.
+# RECALL_API_KEY is a placeholder. The plugin needs a value to send, and the
+# egress gateway replaces it with a JWT minted for the actor.
+metadata:
+  atespace: recall-demo
+  name: hermes
+workerSelector:
+  matchLabels:
+    workload: recall-demo
+containers:
+- name: hermes
+  image: ACTOR_IMAGE
+  env:
+  - name: RECALL_URL
+    value: http://recall.recall-system.svc.cluster.local
+  - name: RECALL_API_KEY
+    value: placeholder
+  wakeupProbe:
+    httpGet:
+      path: /readyz
+      port: 80
+resources:
+  limits:
+    cpuMillicores: 1000
+    memoryBytes: 536870912 # 512Mi
+snapshotConfig:
+  preferredFidelity: SNAPSHOT_FIDELITY_MEMORY
