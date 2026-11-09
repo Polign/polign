@@ -2,8 +2,8 @@
 
 Memory lives in Recall: a new statement replaces the old one, the old one
 stays in the history, and memory can be read as of any earlier time. The
-agent gets five tools (recall_search, recall_profile, recall_remember,
-recall_forget, recall_history), relevant memories in front of each turn, and
+agent gets five tools (polign_recall_search, polign_recall_profile, polign_recall_remember,
+polign_recall_forget, polign_recall_history), relevant memories in front of each turn, and
 each completed turn sent to Recall for extraction in the background.
 
 Where memory lives, in order:
@@ -48,7 +48,7 @@ except ImportError:  # pragma: no cover - older Hermes
 
 logger = logging.getLogger(__name__)
 
-PROVIDER_NAME = "recall"
+PROVIDER_NAME = "polign-recall"
 PROVIDER_LABEL = "Recall"
 CONFIG_FILE = "recall.json"
 LOCAL_DIR = "recall"
@@ -174,7 +174,7 @@ def render_context(memories: list[Any], limit: int = MAX_PREFETCH_MEMORIES) -> s
         "## Recall Memory",
         "Remembered from earlier conversations, and possibly relevant now. A newer statement "
         "replaces an older one; where a value was replaced, the old one is shown so you can "
-        "mention the correction when it matters. Use recall_search to ask for more.",
+        "mention the correction when it matters. Use polign_recall_search to ask for more.",
         *(f"- {describe_memory(m)}" for m in picked),
     ])
 
@@ -219,28 +219,28 @@ def _schema(name: str, description: str, properties: dict[str, dict[str, str]] |
 
 
 TOOL_SCHEMAS = [
-    _schema("recall_search",
+    _schema("polign_recall_search",
             "Search long-term memory by meaning. Each memory says when it was stated and what it replaced, "
             "so a correction shows both the current value and the old one. Call it before answering anything "
             "that may depend on the user's preferences, facts, people, projects or earlier decisions.",
             {"question": {"type": "string", "description": "What you want to know, in words."},
              "as_of": {"type": "string", "description": f"Answer as of this time rather than now: {_INSTANT}."}},
             ("question",)),
-    _schema("recall_profile",
+    _schema("polign_recall_profile",
             "Everything currently believed about the user, newest first, with what each statement replaced. "
-            "No search; use it for an overview, recall_search for a question."),
-    _schema("recall_remember",
+            "No search; use it for an overview, polign_recall_search for a question."),
+    _schema("polign_recall_remember",
             "Store a lasting fact, preference, correction or decision the user stated. A new statement about "
             "the same thing replaces the old one and the result says what it replaced. Call it the moment the "
             "user says something worth keeping; skip chit-chat and things already stored.",
             {"text": {"type": "string", "description": "What to remember, as the user said it."},
              "observed_at": {"type": "string", "description": f"When it was said, as {_INSTANT}. Omit for now."}},
             ("text",)),
-    _schema("recall_forget",
+    _schema("polign_recall_forget",
             "Withdraw what a description names, such as \"my editor\" or \"where I live\". Returns the "
             "statements withdrawn. Nothing is deleted: history keeps them, as of an earlier time still answers.",
             {"text": {"type": "string", "description": "What to forget, described in words."}}, ("text",)),
-    _schema("recall_history",
+    _schema("polign_recall_history",
             "How what is believed about a question changed, statement by statement, oldest first, including "
             "things since forgotten. Use it when the user asks what they said before or when something changed.",
             {"question": {"type": "string", "description": "What to trace, in words."}}, ("question",)),
@@ -250,11 +250,11 @@ SYSTEM_PROMPT = (
     "# Recall Memory\n"
     "Active. Long-term memory kept in Recall by Polign: a new statement replaces the old one, the old one "
     "stays in the history, and memory can be read as of any earlier time.\n"
-    "Call recall_search before answering anything that could depend on prior context (the user's "
+    "Call polign_recall_search before answering anything that could depend on prior context (the user's "
     "preferences, facts, people, projects, earlier decisions); do not rely on the chat window alone. "
     "When a memory shows a replaced value, the newer one is current; mention the correction only when it "
-    "matters. Call recall_remember when the user states something lasting; recall_forget when asked to "
-    "forget; recall_history when asked what changed."
+    "matters. Call polign_recall_remember when the user states something lasting; polign_recall_forget when asked to "
+    "forget; polign_recall_history when asked what changed."
 )
 
 
@@ -454,7 +454,7 @@ class RecallMemoryProvider(MemoryProvider):
             thread.join(timeout=PREFETCH_WAIT_SECS)
         with self._lock:
             if self._prefetch_query != query or thread is None or thread.is_alive():
-                return ""  # still running: the turn goes on without it, recall_search remains
+                return ""  # still running: the turn goes on without it, polign_recall_search remains
             body, count = self._prefetch_result, self._prefetch_count
             self._prefetch_served, self._prefetch_thread = True, None
         if body and RecallStatus is not None:
@@ -584,11 +584,11 @@ class RecallMemoryProvider(MemoryProvider):
 
 
 _TOOLS: dict[str, Callable[[RecallMemoryProvider, dict[str, Any]], dict[str, Any]]] = {
-    "recall_search": RecallMemoryProvider._tool_search,
-    "recall_profile": RecallMemoryProvider._tool_profile,
-    "recall_remember": RecallMemoryProvider._tool_remember,
-    "recall_forget": RecallMemoryProvider._tool_forget,
-    "recall_history": RecallMemoryProvider._tool_history,
+    "polign_recall_search": RecallMemoryProvider._tool_search,
+    "polign_recall_profile": RecallMemoryProvider._tool_profile,
+    "polign_recall_remember": RecallMemoryProvider._tool_remember,
+    "polign_recall_forget": RecallMemoryProvider._tool_forget,
+    "polign_recall_history": RecallMemoryProvider._tool_history,
 }
 
 

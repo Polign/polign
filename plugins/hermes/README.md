@@ -12,8 +12,8 @@ What the plugin does once it is the active memory provider:
 - Sends each completed turn to Recall in the background, where an extraction
   model works out the facts. "I moved to Portland" retires "Lives in Seattle".
 - Mirrors the built-in MEMORY.md and USER.md writes into Recall.
-- Gives the agent five tools: `recall_search`, `recall_profile`,
-  `recall_remember`, `recall_forget`, `recall_history`.
+- Gives the agent five tools: `polign_recall_search`, `polign_recall_profile`,
+  `polign_recall_remember`, `polign_recall_forget`, `polign_recall_history`.
 
 Memory lives in a local database under the Hermes profile by default, with
 nothing to configure. It can also live in a `recall serve` you run, shared
@@ -24,8 +24,8 @@ with your other agents, or in a database you choose.
 From the Hermes plugin catalog, once the entry is merged:
 
 ```bash
-hermes plugins install recall
-hermes memory setup          # pick recall
+hermes plugins install polign-recall
+hermes memory setup          # pick polign-recall
 ```
 
 Until then, drop the directory into the profile and install its one dependency
@@ -33,20 +33,35 @@ into the Hermes environment:
 
 ```bash
 git clone --depth 1 https://github.com/Polign/polign.git /tmp/polign
-cp -r /tmp/polign/plugins/hermes ~/.hermes/plugins/recall
+cp -r /tmp/polign/plugins/hermes ~/.hermes/plugins/polign-recall
 pip install "polign-recall>=0.25.0"      # in the Python environment Hermes runs in
-hermes memory setup                      # pick recall
+hermes memory setup                      # pick polign-recall
 ```
 
 Or set it by hand in `~/.hermes/config.yaml`:
 
 ```yaml
 memory:
-  provider: recall
+  provider: polign-recall
 ```
 
 `hermes memory status` shows where memory lives and which extraction model is
 in use.
+
+### Coming from 0.1.0
+
+0.2.0 renames the plugin so that it does not share a name with another plugin
+in the Hermes catalog. Three things changed, and nothing else:
+
+- The plugin and the provider are `polign-recall`, not `recall`. Move the
+  directory to `~/.hermes/plugins/polign-recall` and set
+  `memory.provider: polign-recall`.
+- The five tools start with `polign_recall_`, for example
+  `polign_recall_search` where 0.1.0 had `recall_search`.
+- The Python package is `hermes-plugin-polign-recall`.
+
+Memory is untouched. It stays where it was, in `$HERMES_HOME/recall` or the
+`recall serve` you run, and the `RECALL_*` settings keep their names.
 
 The `polign-recall` package ships the `recall` binary. On first use with the
 local database, `recall` downloads `polign-server` (about 80 MB) from
@@ -116,11 +131,11 @@ has its own `HERMES_HOME`. Point several profiles, or several agents, at one
 
 | Tool | What it does |
 | --- | --- |
-| `recall_search(question, as_of?)` | Memories relevant to a question, each with the date stated and what it replaced. `as_of` answers as of an earlier time. |
-| `recall_profile()` | Everything currently believed about the user, newest first. |
-| `recall_remember(text, observed_at?)` | Store a statement. The result says what it replaced. |
-| `recall_forget(text)` | Withdraw what a description names. Needs an extraction model. Nothing is deleted. |
-| `recall_history(question)` | How what is believed changed, statement by statement, including things since forgotten. |
+| `polign_recall_search(question, as_of?)` | Memories relevant to a question, each with the date stated and what it replaced. `as_of` answers as of an earlier time. |
+| `polign_recall_profile()` | Everything currently believed about the user, newest first. |
+| `polign_recall_remember(text, observed_at?)` | Store a statement. The result says what it replaced. |
+| `polign_recall_forget(text)` | Withdraw what a description names. Needs an extraction model. Nothing is deleted. |
+| `polign_recall_history(question)` | How what is believed changed, statement by statement, including things since forgotten. |
 
 Before each turn the plugin injects a `## Recall Memory` block with up to eight
 memories, found by meaning for the turn's message. The recall starts when the
@@ -132,7 +147,7 @@ means the turn goes on without the block and the tools remain.
 - Text mode has one subject, the user. On a gateway serving many people from
   one profile, their memories are not separated. Give each person a profile,
   or a key of their own on a `recall serve`.
-- `recall_forget` and the mirroring of MEMORY.md removals need an extraction
+- `polign_recall_forget` and the mirroring of MEMORY.md removals need an extraction
   model; without one they are skipped.
 - A `recall serve` must serve the text tools (`-text`). The typed tools are not
   used by this plugin.

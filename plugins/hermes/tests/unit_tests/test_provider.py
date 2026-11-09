@@ -34,7 +34,7 @@ def test_registers_a_new_instance_per_load(plugin):
     plugin.register(Ctx())
     plugin.register(Ctx())
     assert len(seen) == 2 and seen[0] is not seen[1]
-    assert seen[0].name == "recall"
+    assert seen[0].name == "polign-recall"
 
 
 def test_settings_default_to_a_local_database_under_the_profile(plugin, hermes_home, secrets):
@@ -178,7 +178,7 @@ def test_automatic_writes_skip_non_primary_contexts(plugin, hermes_home):
     provider.on_memory_write("add", "memory", "Prefers tea")
     assert provider.idle(5)
     assert [c for c in client.calls if c[0] != "connect"] == []
-    out = json.loads(provider.handle_tool_call("recall_remember", {"text": "I like tea."}))
+    out = json.loads(provider.handle_tool_call("polign_recall_remember", {"text": "I like tea."}))
     assert out["remembered"][0]["text"] == "I like tea.", "the agent's own tools still work"
     provider.shutdown()
 
@@ -209,42 +209,42 @@ def test_remove_is_not_mirrored_without_an_extraction_model(plugin, hermes_home)
 def test_tools(made):
     provider, client = made
     names = [s["name"] for s in provider.get_tool_schemas()]
-    assert names == ["recall_search", "recall_profile", "recall_remember", "recall_forget", "recall_history"]
+    assert names == ["polign_recall_search", "polign_recall_profile", "polign_recall_remember", "polign_recall_forget", "polign_recall_history"]
     assert all(s["parameters"]["type"] == "object" for s in provider.get_tool_schemas())
 
-    out = json.loads(provider.handle_tool_call("recall_search", {"question": "where does the user live", "as_of": "2026-10-01T00:00:00Z"}))
+    out = json.loads(provider.handle_tool_call("polign_recall_search", {"question": "where does the user live", "as_of": "2026-10-01T00:00:00Z"}))
     assert out == {"memories": [{"text": "Lives in Portland", "since": "2026-10-20", "days_ago": 13,
                                  "before": [{"text": "Lives in Seattle", "since": "2026-09-01"}]}]}
     assert client.calls[-1] == ("ask", {"question": "where does the user live", "as_of": "2026-10-01T00:00:00Z", "since": None})
 
-    out = json.loads(provider.handle_tool_call("recall_profile", {}))
+    out = json.loads(provider.handle_tool_call("polign_recall_profile", {}))
     assert [m["text"] for m in out["memories"]] == ["Lives in Portland", "Edits in vim"]
 
-    out = json.loads(provider.handle_tool_call("recall_remember", {"text": "Lives in Bend", "observed_at": "2026-11-01T00:00:00Z"}))
+    out = json.loads(provider.handle_tool_call("polign_recall_remember", {"text": "Lives in Bend", "observed_at": "2026-11-01T00:00:00Z"}))
     assert out == {"remembered": [{"text": "Lives in Bend", "replaces": ["Lives in Portland"]}]}
     assert client.calls[-1][1]["observed_at"] == "2026-11-01T00:00:00Z"
 
-    out = json.loads(provider.handle_tool_call("recall_history", {"question": "where I live"}))
+    out = json.loads(provider.handle_tool_call("polign_recall_history", {"question": "where I live"}))
     assert out["history"][0]["about"] == "where I live"
     assert out["history"][0]["changes"][1] == {"when": "2026-11-02T00:00:00Z", "change": "replaced",
                                                "ended": ["Lives in Seattle"], "began": ["Lives in Portland"]}
 
-    out = json.loads(provider.handle_tool_call("recall_forget", {"text": "vim"}))
+    out = json.loads(provider.handle_tool_call("polign_recall_forget", {"text": "vim"}))
     assert out == {"forgotten": ["Edits in vim"]}
 
 
 def test_tool_errors_are_json(made):
     provider, client = made
-    assert json.loads(provider.handle_tool_call("recall_search", {}))["error"] == "question is required"
+    assert json.loads(provider.handle_tool_call("polign_recall_search", {}))["error"] == "question is required"
     assert "Unknown tool" in json.loads(provider.handle_tool_call("nope", {}))["error"]
     client.fail = RecallError("no model on the server", code="unsupported")
-    assert json.loads(provider.handle_tool_call("recall_forget", {"text": "x"}))["error"] == "unsupported: no model on the server"
+    assert json.loads(provider.handle_tool_call("polign_recall_forget", {"text": "x"}))["error"] == "unsupported: no model on the server"
 
 
 def test_kept_as_text_is_explained(plugin, made):
     provider, client = made
     client.remember = lambda **kw: TextResult((), True)
-    out = json.loads(provider.handle_tool_call("recall_remember", {"text": "hello"}))
+    out = json.loads(provider.handle_tool_call("polign_recall_remember", {"text": "hello"}))
     assert out["kept_as_text"] is True and "extraction model" in out["note"]
 
 
@@ -260,16 +260,16 @@ def test_breaker_opens_after_repeated_failures_and_a_dead_transport_reopens(plug
     provider.initialize("s", hermes_home=str(hermes_home))
     assert provider.idle(5)
     for _ in range(plugin.BREAKER_THRESHOLD):
-        assert "error" in json.loads(provider.handle_tool_call("recall_profile", {}))
+        assert "error" in json.loads(provider.handle_tool_call("polign_recall_profile", {}))
     assert len(clients) == plugin.BREAKER_THRESHOLD, "a dead transport is closed and reopened on the next call"
     assert all(c.closed for c in clients)
     assert provider._breaker_open_until > time.monotonic()
-    out = json.loads(provider.handle_tool_call("recall_profile", {}))
+    out = json.loads(provider.handle_tool_call("polign_recall_profile", {}))
     assert "unavailable" in out["error"] and len(clients) == plugin.BREAKER_THRESHOLD
     assert provider.prefetch("where do I live?") == ""
     provider._breaker_open_until = 0.0
     clients[-1].fail = None
-    json.loads(provider.handle_tool_call("recall_profile", {}))
+    json.loads(provider.handle_tool_call("polign_recall_profile", {}))
     assert len(clients) == plugin.BREAKER_THRESHOLD + 1
     provider.shutdown()
 
@@ -287,4 +287,4 @@ def test_shutdown_drains_writes_and_closes(made):
 def test_system_prompt_names_the_tools(made):
     provider, _ = made
     block = provider.system_prompt_block()
-    assert block.startswith("# Recall Memory") and "recall_search" in block and "recall_remember" in block
+    assert block.startswith("# Recall Memory") and "polign_recall_search" in block and "polign_recall_remember" in block

@@ -1,6 +1,6 @@
 [project]
-name = "hermes-plugin-recall"
-version = "0.1.0"
+name = "hermes-plugin-polign-recall"
+version = "0.2.0"
 description = "Hermes Agent memory provider plugin: Recall by Polign"
 readme = "README.md"
 requires-python = ">=3.11"

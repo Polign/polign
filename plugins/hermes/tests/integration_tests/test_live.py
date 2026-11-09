@@ -33,14 +33,14 @@ def test_turns_are_remembered_and_recalled(plugin, provider, hermes_home):
     assert (hermes_home / "recall").is_dir(), "memory lives under the profile"
     provider.sync_turn("I moved to Portland last week, and I edit in vim.", "Noted.", session_id="session-live")
     assert provider.idle(120)
-    out = json.loads(provider.handle_tool_call("recall_search", {"question": "where does the user live"}))
+    out = json.loads(provider.handle_tool_call("polign_recall_search", {"question": "where does the user live"}))
     assert any("Portland" in m["text"] for m in out["memories"]), out
     provider.on_turn_start(2, "which editor do I use?")
     block = provider.prefetch("which editor do I use?")
     assert block.startswith("## Recall Memory") and "vim" in block
     assert provider.recall_status().count >= 1
-    out = json.loads(provider.handle_tool_call("recall_remember", {"text": "My desk is by the window."}))
+    out = json.loads(provider.handle_tool_call("polign_recall_remember", {"text": "My desk is by the window."}))
     assert out.get("kept_as_text") is True
-    assert "window" in json.dumps(provider.handle_tool_call("recall_profile", {}))
-    out = json.loads(provider.handle_tool_call("recall_history", {"question": "desk"}))
+    assert "window" in json.dumps(provider.handle_tool_call("polign_recall_profile", {}))
+    out = json.loads(provider.handle_tool_call("polign_recall_history", {"question": "desk"}))
     assert "history" in out

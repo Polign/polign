@@ -36,7 +36,7 @@ The script checks five things:
 
 1. A completed turn is sent to Recall.
 2. The next turn starts with that memory in front of it.
-3. The agent's tools (`recall_search`) reach the same memory.
+3. The agent's tools (`polign_recall_search`) reach the same memory.
 4. After a suspend and resume, the provider saves and recalls without being
    reopened.
 5. After the actor is deleted and created again, a new process starts with the
@@ -53,4 +53,4 @@ The Recall server in the example has no extraction model, so each turn is kept
 as written and found by its words.
 
 Tested on kind with Substrate v1.0.0, polign-recall 0.24.0, and hermes-agent
-at 7a5d3068f2.
+at 4f6ebb9afe.

@@ -1,5 +1,5 @@
-name: recall
-version: 0.1.0
+name: polign-recall
+version: 0.2.0
 description: "Recall by Polign: long-term memory where a new statement replaces the old one, the old one stays in the history, and memory can be read as of any earlier time. Local database by default, or a recall serve you run."
 hooks:
   - on_turn_start

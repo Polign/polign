@@ -104,9 +104,9 @@ echo "prefetch: $out"
 [[ "$out" == *"vim"* ]] || fail "the memory did not come back at the start of the next turn"
 
 say "3. The agent's tools reach the same memory"
-out="$(call /tool '{"name":"recall_search","args":{"question":"where does the user live"}}')"
-echo "recall_search: $out"
-[[ "$out" == *"Portland"* ]] || fail "recall_search did not find the turn"
+out="$(call /tool '{"name":"polign_recall_search","args":{"question":"where does the user live"}}')"
+echo "polign_recall_search: $out"
+[[ "$out" == *"Portland"* ]] || fail "polign_recall_search did not find the turn"
 
 say "4. Suspend the actor. After the resume the provider works without reconnecting by hand"
 ate suspend actor "$ACTOR" -a "$ATESPACE" --mode=sync >/dev/null
