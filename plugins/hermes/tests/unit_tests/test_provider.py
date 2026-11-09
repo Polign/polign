@@ -77,6 +77,7 @@ def test_open_client_passes_the_settings_through(plugin, monkeypatch):
                         "extract_key_name": "ANTHROPIC_API_KEY", "extract_key": "sk"})
     assert seen["text"] is True and seen["backend"] == "local" and seen["backend_url"] == "/x"
     assert seen["extract_model"] == "anthropic:claude-haiku-5-5" and seen["env"] == {"ANTHROPIC_API_KEY": "sk"}
+    assert seen["inherit_env"] is False, "only the extraction key leaves the Hermes process"
     seen.clear()
     plugin.open_client({"url": "http://s", "api_key": "rcl", "token_file": "", "backend": "", "backend_url": "",
                         "backend_key": "", "extract_model": "", "extract_key_name": "", "extract_key": ""})

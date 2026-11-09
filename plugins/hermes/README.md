@@ -34,7 +34,7 @@ into the Hermes environment:
 ```bash
 git clone --depth 1 https://github.com/Polign/polign.git /tmp/polign
 cp -r /tmp/polign/plugins/hermes ~/.hermes/plugins/recall
-pip install "polign-recall>=0.24.0"      # in the Python environment Hermes runs in
+pip install "polign-recall>=0.25.0"      # in the Python environment Hermes runs in
 hermes memory setup                      # pick recall
 ```
 
@@ -83,6 +83,30 @@ In order, the first that is set wins:
 | `RECALL_URL` and `RECALL_API_KEY` in `.env`, or `url` in `recall.json` and the key in `.env` | a [`recall serve`](https://github.com/Polign/recall/blob/main/docs/memory-api-v1.md) you run, started with `-text`. The key picks the namespace; the extraction model is the server's. |
 | `RECALL_BACKEND` and `RECALL_BACKEND_URL` (and `RECALL_BACKEND_KEY`) in `.env` | a database you chose: `local` with a directory, `polign` with `http://host:23000`, `pgvector` with `postgres://...`, `mongodb` or `qdrant` |
 | nothing | a local database in `$HERMES_HOME/recall`, run by `recall` itself |
+
+### The local database is a separate process
+
+In the default case, `recall` starts a `polign-server` process for
+`$HERMES_HOME/recall` on a loopback port, with a key generated in that
+directory. The server is detached, so it keeps running after Hermes exits,
+and the next Hermes session finds it again. Its process id is in
+`$HERMES_HOME/recall/runtime.json` and its log in `server.log` in the same
+directory. To stop it:
+
+```bash
+kill "$(python3 -c 'import json,os;print(json.load(open(os.path.expanduser("~/.hermes/recall/runtime.json")))["pid"])')"
+```
+
+(replace `~/.hermes` with your `HERMES_HOME` if it is elsewhere). Memory is
+on disk under that directory, so stopping the server loses nothing; the next
+session starts it again.
+
+### What the recall process sees
+
+The plugin starts the `recall` process with only `PATH`, the home and
+temporary directories, the `RECALL_*` and `POLIGN_*` variables, and the one
+extraction key named by the model in use. The other provider keys and bot
+tokens in Hermes's `.env` do not reach it.
 
 A Hermes profile has its own memory in the default case, since each profile
 has its own `HERMES_HOME`. Point several profiles, or several agents, at one

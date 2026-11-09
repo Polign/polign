@@ -145,10 +145,13 @@ def open_client(settings: dict[str, str], timeout: float = 120.0):
     if settings["url"]:
         return Client(url=settings["url"], api_key=settings["api_key"] or None,
                       token_file=settings["token_file"] or None, timeout=timeout)
+    # The recall process gets the extraction key and nothing else from the
+    # Hermes process: inherit_env=False keeps every other provider key and bot
+    # token in .env out of it (polign-recall 0.25 or later).
     env = {settings["extract_key_name"]: settings["extract_key"]} if settings["extract_key_name"] and settings["extract_key"] else None
     return Client(text=True, backend=settings["backend"] or None, backend_url=settings["backend_url"] or None,
                   backend_key=settings["backend_key"] or None, extract_model=settings["extract_model"] or None,
-                  env=env, timeout=timeout)
+                  env=env, inherit_env=False, timeout=timeout)
 
 
 # -- Rendering ---------------------------------------------------------------

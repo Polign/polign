@@ -8,4 +8,4 @@ hooks:
   - on_memory_write
   - on_session_switch
 python_dependencies:
-  - "polign-recall>=0.24.0,<1"
+  - "polign-recall>=0.25.0,<1"

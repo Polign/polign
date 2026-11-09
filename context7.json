@@ -1,0 +1,13 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "Polign Python packages",
+  "description": "Python packages from Polign: the polign client for polign_db, and the Recall integrations recall-langgraph (RecallResume, RecallSaver, RecallStore), recall-openai-agents (RecallSession), recall-pydantic-ai (RecallMemory), recall-livekit and recall-vapi, plus langchain-polign and llama-index-vector-stores-polign vector stores.",
+  "branch": "main",
+  "folders": ["python", "plugins", "examples"],
+  "excludeFolders": ["python/polign_db", "charts", "proto"],
+  "excludeFiles": ["CHANGELOG.md"],
+  "rules": [
+    "Each package has its own README under python/<package>/; install the one for your framework, for example pip install recall-langgraph.",
+    "Recall is typed, durable memory and state for AI agents; see github.com/Polign/recall for the server and the Python client polign-recall."
+  ]
+}

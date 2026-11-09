@@ -10,9 +10,10 @@ authors = [{ name = "Polign" }]
 # every `hermes update`. Hermes pins its own dependencies exactly and refuses a
 # plugin whose requirements cannot resolve against them, so keep upper bounds.
 # polign-recall ships the `recall` binary in its platform wheels and depends on
-# nothing else at runtime.
+# nothing else at runtime. 0.25.0 is the first with Client(inherit_env=False),
+# which keeps the other keys in .env out of the recall process.
 dependencies = [
-    "polign-recall>=0.24.0,<1",
+    "polign-recall>=0.25.0,<1",
 ]
 
 [project.optional-dependencies]
