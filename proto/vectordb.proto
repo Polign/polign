@@ -18,6 +18,8 @@ service VectorDB {
   rpc UpdateMetadata(UpdateMetadataRequest) returns (UpdateMetadataResponse);
   rpc SearchVectors(SearchVectorsRequest) returns (SearchVectorsResponse);
   rpc DescribeCollection(DescribeCollectionRequest) returns (DescribeCollectionResponse);
+  // Facets counts metadata values over every record a filter matches.
+  rpc Facets(FacetsRequest) returns (FacetsResponse);
 
   // Collection admin: the explicit lifecycle for collections on
   // customer-owned backends (bring-your-own bucket). Available only when the
@@ -227,11 +229,24 @@ message DeleteVectorResponse {
 // response. The patch resolves against each record's current state on the
 // server, so a cold-served collection must be point-readable (its segments
 // carry id filters); one that is not fails with UNIMPLEMENTED.
+//
+// updates is the other form: a separate patch for each record, for a price or
+// inventory feed where every record gets its own values. The whole batch is
+// one read of current state and one append; two patches for one id apply in
+// order. A request carries either ids with set/unset, or updates, not both.
 message UpdateMetadataRequest {
   string collection = 1;
   repeated string ids = 2;
   map<string, TypedValue> set = 3;
   repeated string unset = 4;
+  repeated MetadataPatch updates = 5;
+}
+
+// MetadataPatch is one record's patch in UpdateMetadataRequest.updates.
+message MetadataPatch {
+  string id = 1;
+  map<string, TypedValue> set = 2;
+  repeated string unset = 3;
 }
 
 message UpdateMetadataResponse {
@@ -315,6 +330,12 @@ message SearchVectorsRequest {
   // the approximate fast tier that skips exact rescoring entirely. Other
   // collection types rank exactly and ignore it.
   int32 rescore = 11;
+  // Fuzzy corrects words of text that no document contains to the closest
+  // indexed word before searching (one edit for words of 4 to 7 letters, two
+  // for longer ones). Words the index holds, words under four letters and
+  // anything containing a digit are never changed. Ignored for a request
+  // made with a namespaced key, because the vocabulary is the collection's.
+  bool fuzzy = 12;
 }
 
 // FilterExpr is one node of a metadata filter expression tree. Exactly one of
@@ -400,4 +421,72 @@ message SearchHit {
 
 message SearchVectorsResponse {
   repeated SearchHit hits = 1;
+  // Corrections maps each query word a fuzzy search replaced to the word it
+  // searched for instead. Empty when nothing was replaced.
+  map<string, string> corrections = 2;
+}
+
+// FacetsRequest counts metadata values over every record filter_expr matches:
+// all of them, not the top hits of a search. Counts are exact and include
+// writes as soon as they are acknowledged. At most 32 facets per request.
+message FacetsRequest {
+  string collection = 1;
+  // Absent means every record.
+  FilterExpr filter_expr = 2;
+  repeated FacetSpec facets = 3;
+}
+
+// FacetSpec asks for the counts of one metadata field. Without ranges the
+// answer is one count per distinct value, highest first, cut to limit; with
+// ranges it is one count per range, for numeric values only.
+message FacetSpec {
+  string field = 1;
+  // Name keys this facet in the response. Empty means field.
+  string name = 2;
+  // Maximum values returned. 0 means 100; at most 1000.
+  int32 limit = 3;
+  repeated FacetRange ranges = 4;
+  // own_filter replaces the request filter for this facet only, which is how
+  // a results page keeps showing the other brands while one is selected.
+  // Leave filter_expr absent with own_filter set to count every record.
+  bool own_filter = 5;
+  FilterExpr filter_expr = 6;
+}
+
+// FacetRange is one numeric bucket: from <= value < to. An absent bound is
+// open.
+message FacetRange {
+  optional double from = 1;
+  optional double to = 2;
+}
+
+message FacetsResponse {
+  // Records the request filter matches, whatever the facets asked for.
+  int64 total = 1;
+  // One result per requested facet, in request order.
+  repeated FacetResult facets = 2;
+}
+
+message FacetResult {
+  string name = 1;
+  string field = 2;
+  // Records this facet's filter selected, and how many of them do not carry
+  // the field.
+  int64 matched = 3;
+  int64 missing = 4;
+  // Distinct values before limit cut the list. Unset for a range facet.
+  int64 distinct = 5;
+  repeated FacetValue values = 6;
+  repeated FacetRangeCount ranges = 7;
+}
+
+message FacetValue {
+  TypedValue value = 1;
+  int64 count = 2;
+}
+
+message FacetRangeCount {
+  optional double from = 1;
+  optional double to = 2;
+  int64 count = 3;
 }

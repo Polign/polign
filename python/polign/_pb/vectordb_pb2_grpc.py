@@ -87,6 +87,11 @@ class VectorDBStub(object):
                 request_serializer=vectordb__pb2.DescribeCollectionRequest.SerializeToString,
                 response_deserializer=vectordb__pb2.DescribeCollectionResponse.FromString,
                 _registered_method=True)
+        self.Facets = channel.unary_unary(
+                '/polign.v1.VectorDB/Facets',
+                request_serializer=vectordb__pb2.FacetsRequest.SerializeToString,
+                response_deserializer=vectordb__pb2.FacetsResponse.FromString,
+                _registered_method=True)
         self.CreateCollection = channel.unary_unary(
                 '/polign.v1.VectorDB/CreateCollection',
                 request_serializer=vectordb__pb2.CreateCollectionRequest.SerializeToString,
@@ -180,6 +185,13 @@ class VectorDBServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Facets(self, request, context):
+        """Facets counts metadata values over every record a filter matches.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def CreateCollection(self, request, context):
         """Collection admin: the explicit lifecycle for collections on
         customer-owned backends (bring-your-own bucket). Available only when the
@@ -267,6 +279,11 @@ def add_VectorDBServicer_to_server(servicer, server):
                     servicer.DescribeCollection,
                     request_deserializer=vectordb__pb2.DescribeCollectionRequest.FromString,
                     response_serializer=vectordb__pb2.DescribeCollectionResponse.SerializeToString,
+            ),
+            'Facets': grpc.unary_unary_rpc_method_handler(
+                    servicer.Facets,
+                    request_deserializer=vectordb__pb2.FacetsRequest.FromString,
+                    response_serializer=vectordb__pb2.FacetsResponse.SerializeToString,
             ),
             'CreateCollection': grpc.unary_unary_rpc_method_handler(
                     servicer.CreateCollection,
@@ -567,6 +584,33 @@ class VectorDB(object):
             '/polign.v1.VectorDB/DescribeCollection',
             vectordb__pb2.DescribeCollectionRequest.SerializeToString,
             vectordb__pb2.DescribeCollectionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Facets(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/polign.v1.VectorDB/Facets',
+            vectordb__pb2.FacetsRequest.SerializeToString,
+            vectordb__pb2.FacetsResponse.FromString,
             options,
             channel_credentials,
             insecure,

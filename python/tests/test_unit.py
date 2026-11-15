@@ -534,3 +534,94 @@ def test_collection_api_not_enabled(stub):
     )
     with pytest.raises(polign.NotEnabledError):
         client.list_collections()
+
+
+# -- facets, per-record patches, fuzzy search --------------------------------
+
+
+def test_facets_request_and_result(stub):
+    handler, client = stub
+    handler.routes["POST /v1/collections/shop/facets"] = (
+        200,
+        {
+            "total": 2,
+            "facets": {
+                "brand": {"field": "brand", "matched": 2, "missing": 0, "distinct": 1,
+                          "values": [{"value": "acme", "count": 2}]},
+                "price": {"field": "price", "matched": 2, "missing": 1,
+                          "ranges": [{"to": 500, "count": 1}, {"from": 500, "count": 0}]},
+                "categories": {"field": "category", "matched": 9, "missing": 0, "distinct": 0},
+            },
+        },
+        {},
+    )
+    counts = client.facets(
+        "shop",
+        [
+            "brand",
+            polign.Facet("price", ranges=[(None, 500), (500, None)]),
+            polign.Facet("category", name="categories", limit=5, own_filter=True),
+            polign.Facet("brand", name="in_stock_brands", filter={"in_stock": True}),
+        ],
+        filter={"category": "tv"},
+    )
+    sent = json.loads(handler.requests[-1][3])
+    assert sent == {
+        "filter": {"category": "tv"},
+        "facets": [
+            {"field": "brand"},
+            {"field": "price", "ranges": [{"to": 500.0}, {"from": 500.0}]},
+            {"field": "category", "name": "categories", "limit": 5, "filter": {}},
+            {"field": "brand", "name": "in_stock_brands", "filter": {"in_stock": True}},
+        ],
+    }
+    assert counts.total == 2
+    assert counts["brand"].values == [polign.FacetValue("acme", 2)]
+    assert counts["brand"].distinct == 1
+    assert counts["price"].distinct is None
+    assert counts["price"].ranges == [
+        polign.FacetRangeCount(None, 500, 1),
+        polign.FacetRangeCount(500, None, 0),
+    ]
+    assert counts["price"].missing == 1
+    assert counts["categories"].values == []
+
+
+def test_patch_metadata_sends_one_patch_per_record(stub):
+    handler, client = stub
+    handler.routes["POST /v1/collections/shop/vectors:update"] = (200, {"ids": ["p1", "p2"]}, {})
+    ids = client.patch_metadata(
+        "shop",
+        [
+            polign.MetadataPatch("p1", set={"price": 19.99}),
+            {"id": "p2", "set": {"in_stock": False}, "unset": ["promo"]},
+        ],
+    )
+    assert ids == ["p1", "p2"]
+    assert json.loads(handler.requests[-1][3]) == {
+        "updates": [
+            {"id": "p1", "set": {"price": 19.99}},
+            {"id": "p2", "set": {"in_stock": False}, "unset": ["promo"]},
+        ]
+    }
+    with pytest.raises(TypeError, match="unknown keys"):
+        client.patch_metadata("shop", [{"id": "p1", "sets": {"a": 1}}])
+
+
+def test_fuzzy_search_reports_corrections(stub):
+    handler, client = stub
+    handler.routes["POST /v1/collections/docs/query"] = (
+        200,
+        {"hits": [{"id": "tv", "score": 1.5}], "corrections": {"telvison": "television"}},
+        {},
+    )
+    hits = client.search("docs", text="telvison", k=3, fuzzy=True)
+    assert json.loads(handler.requests[-1][3]) == {"k": 3, "text": "telvison", "fuzzy": True}
+    assert [h.id for h in hits] == ["tv"] and len(hits) == 1
+    assert hits.corrections == {"telvison": "television"}
+
+    # Without fuzzy nothing is sent and the result is still a plain list.
+    handler.routes["POST /v1/collections/docs/query"] = (200, {"hits": []}, {})
+    hits = client.search("docs", text="telvison", k=3)
+    assert "fuzzy" not in json.loads(handler.requests[-1][3])
+    assert hits == [] and hits.corrections == {}

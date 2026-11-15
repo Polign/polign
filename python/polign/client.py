@@ -12,7 +12,7 @@ import http.client
 import json
 import ssl
 import threading
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 from urllib.parse import quote, urlsplit
 
 from . import errors
@@ -22,8 +22,15 @@ from .types import (
     CollectionDescription,
     CollectionInfo,
     DeleteResult,
+    Facet,
+    FacetCounts,
+    FacetRangeCount,
+    FacetResult,
+    FacetValue,
     Fusion,
     Hit,
+    HitList,
+    MetadataPatch,
     MetaValue,
     Vector,
     VectorPage,
@@ -229,6 +236,77 @@ class Client:
         )
         return list(resp.get("ids") or [])
 
+    def patch_metadata(
+        self, collection: str, updates: Sequence[Union[MetadataPatch, Dict[str, Any]]]
+    ) -> List[str]:
+        """Apply a separate metadata patch to each record in one request.
+
+        This is :meth:`update_metadata` for a price or inventory feed, where
+        every record gets its own values. Each update is a
+        :class:`MetadataPatch` or a ``{"id": ..., "set": {...}, "unset":
+        [...]}`` mapping. The whole batch is one read of current state and
+        one append on the server; two patches for one id apply in order.
+
+        Returns the ids that were patched, each once, in first-seen order;
+        ids that do not exist are omitted. A batch holds at most 5000
+        updates. Needs a server newer than 0.15.0.
+        """
+        body = {"updates": [_patch_to_json(u) for u in updates]}
+        resp = self._request(
+            "POST", f"/v1/collections/{_seg(collection)}/vectors:update", body
+        )
+        return list(resp.get("ids") or [])
+
+    def facets(
+        self,
+        collection: str,
+        facets: Sequence[Union[Facet, str]],
+        *,
+        filter: Optional[Dict[str, Any]] = None,
+    ) -> FacetCounts:
+        """Count metadata values over every record ``filter`` matches.
+
+        The counts cover all matching records, not the top hits of a search,
+        and include writes as soon as they are acknowledged. Each facet is a
+        :class:`Facet`, or just a field name for the default (one count per
+        distinct value, the 100 most common). ``filter`` is the same
+        predicate language :meth:`search` takes; without it every record is
+        counted. At most 32 facets per request.
+
+        Returns a :class:`FacetCounts`: ``counts.total`` is the number of
+        matching records and ``counts["brand"].values`` the counts of the
+        facet named ``brand``. Needs a server newer than 0.15.0.
+        """
+        body: Dict[str, object] = {"facets": [_facet_to_json(f) for f in facets]}
+        if filter:
+            validate_filter_finite(filter)
+            body["filter"] = dict(filter)
+        resp = self._request(
+            "POST",
+            f"/v1/collections/{_seg(collection)}/facets",
+            body,
+            retry_safe=True,
+        )
+        out = FacetCounts(total=int(resp.get("total") or 0))
+        for name, r in (resp.get("facets") or {}).items():
+            out.facets[name] = FacetResult(
+                field=r.get("field", ""),
+                matched=int(r.get("matched") or 0),
+                missing=int(r.get("missing") or 0),
+                distinct=r.get("distinct"),
+                values=[
+                    FacetValue(value=v.get("value"), count=int(v.get("count") or 0))
+                    for v in r.get("values") or []
+                ],
+                ranges=[
+                    FacetRangeCount(
+                        start=g.get("from"), end=g.get("to"), count=int(g.get("count") or 0)
+                    )
+                    for g in r.get("ranges") or []
+                ],
+            )
+        return out
+
     def delete_many(
         self,
         collection: str,
@@ -293,8 +371,17 @@ class Client:
         fusion: Optional[Fusion] = None,
         rescore: int = 0,
         typed_metadata: bool = False,
-    ) -> List[Hit]:
+        fuzzy: bool = False,
+    ) -> HitList:
         """Nearest-neighbour / text / hybrid search.
+
+        Returns a :class:`HitList`, a list of :class:`Hit`. With
+        ``fuzzy=True`` each word of ``text`` that no document contains is
+        replaced by the closest indexed word before searching (one edit for
+        words of 4 to 7 letters, two for longer ones), and the list's
+        ``corrections`` maps what was replaced. Words the index holds are
+        never changed; a namespaced key's query is never corrected. Needs a
+        server newer than 0.15.0.
 
         Pass ``values`` for vector search, ``text`` for BM25 lexical search
         (requires a segment index on the server), or both for hybrid search
@@ -328,6 +415,8 @@ class Client:
             body["typed_metadata"] = True
         if text is not None:
             body["text"] = text
+        if fuzzy:
+            body["fuzzy"] = True
         if fusion is not None:
             body["fusion"] = {
                 "method": fusion.method,
@@ -340,15 +429,18 @@ class Client:
             body,
             retry_safe=True,
         )
-        return [
-            Hit(
-                id=h["id"],
-                distance=h.get("distance", 0.0),
-                score=h.get("score", 0.0),
-                metadata=h.get("metadata") or {},
-            )
-            for h in resp.get("hits") or []
-        ]
+        return HitList(
+            (
+                Hit(
+                    id=h["id"],
+                    distance=h.get("distance", 0.0),
+                    score=h.get("score", 0.0),
+                    metadata=h.get("metadata") or {},
+                )
+                for h in resp.get("hits") or []
+            ),
+            corrections=resp.get("corrections"),
+        )
 
     # -- collection listing and admin (-byo-store required for lifecycle) --
 
@@ -533,6 +625,55 @@ class Client:
 def _seg(value: str) -> str:
     """Percent-encode one path segment (collection or vector id)."""
     return quote(str(value), safe="")
+
+
+def _patch_fields(update) -> Tuple[str, Optional[Dict[str, Any]], Optional[Sequence[str]]]:
+    """The id, set and unset of one update, from a MetadataPatch or a mapping."""
+    if isinstance(update, MetadataPatch):
+        return update.id, update.set, update.unset
+    unknown = set(update) - {"id", "set", "unset"}
+    if unknown:
+        raise TypeError(f"metadata patch has unknown keys {sorted(unknown)}")
+    return update.get("id", ""), update.get("set"), update.get("unset")
+
+
+def _patch_to_json(update) -> dict:
+    id, set_, unset = _patch_fields(update)
+    out: Dict[str, object] = {"id": id}
+    if set_:
+        out["set"] = dict(set_)
+    if unset:
+        out["unset"] = list(unset)
+    return out
+
+
+def _as_facet(facet) -> Facet:
+    return Facet(field=facet) if isinstance(facet, str) else facet
+
+
+def _facet_to_json(facet) -> dict:
+    f = _as_facet(facet)
+    out: Dict[str, object] = {"field": f.field}
+    if f.name:
+        out["name"] = f.name
+    if f.limit:
+        out["limit"] = int(f.limit)
+    if f.ranges:
+        ranges = []
+        for start, end in f.ranges:
+            r: Dict[str, float] = {}
+            if start is not None:
+                r["from"] = float(start)
+            if end is not None:
+                r["to"] = float(end)
+            ranges.append(r)
+        out["ranges"] = ranges
+    if f.filter:
+        validate_filter_finite(f.filter)
+        out["filter"] = dict(f.filter)
+    elif f.own_filter:
+        out["filter"] = {}
+    return out
 
 
 def _vector_to_json(id: str, values, metadata) -> dict:

@@ -233,7 +233,7 @@ class DeleteVectorResponse(_message.Message):
     def __init__(self, deleted: bool = ...) -> None: ...
 
 class UpdateMetadataRequest(_message.Message):
-    __slots__ = ("collection", "ids", "set", "unset")
+    __slots__ = ("collection", "ids", "set", "unset", "updates")
     class SetEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
@@ -245,11 +245,30 @@ class UpdateMetadataRequest(_message.Message):
     IDS_FIELD_NUMBER: _ClassVar[int]
     SET_FIELD_NUMBER: _ClassVar[int]
     UNSET_FIELD_NUMBER: _ClassVar[int]
+    UPDATES_FIELD_NUMBER: _ClassVar[int]
     collection: str
     ids: _containers.RepeatedScalarFieldContainer[str]
     set: _containers.MessageMap[str, TypedValue]
     unset: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, collection: _Optional[str] = ..., ids: _Optional[_Iterable[str]] = ..., set: _Optional[_Mapping[str, TypedValue]] = ..., unset: _Optional[_Iterable[str]] = ...) -> None: ...
+    updates: _containers.RepeatedCompositeFieldContainer[MetadataPatch]
+    def __init__(self, collection: _Optional[str] = ..., ids: _Optional[_Iterable[str]] = ..., set: _Optional[_Mapping[str, TypedValue]] = ..., unset: _Optional[_Iterable[str]] = ..., updates: _Optional[_Iterable[_Union[MetadataPatch, _Mapping]]] = ...) -> None: ...
+
+class MetadataPatch(_message.Message):
+    __slots__ = ("id", "set", "unset")
+    class SetEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: TypedValue
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[_Union[TypedValue, _Mapping]] = ...) -> None: ...
+    ID_FIELD_NUMBER: _ClassVar[int]
+    SET_FIELD_NUMBER: _ClassVar[int]
+    UNSET_FIELD_NUMBER: _ClassVar[int]
+    id: str
+    set: _containers.MessageMap[str, TypedValue]
+    unset: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, id: _Optional[str] = ..., set: _Optional[_Mapping[str, TypedValue]] = ..., unset: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class UpdateMetadataResponse(_message.Message):
     __slots__ = ("ids",)
@@ -298,7 +317,7 @@ class DescribeCollectionResponse(_message.Message):
     def __init__(self, name: _Optional[str] = ..., dimension: _Optional[int] = ..., metric: _Optional[str] = ..., index_type: _Optional[str] = ..., segment_backed: bool = ..., text_field: _Optional[str] = ...) -> None: ...
 
 class SearchVectorsRequest(_message.Message):
-    __slots__ = ("collection", "values", "k", "ef", "cold", "nprobe", "filter", "text", "fusion", "filter_expr", "rescore")
+    __slots__ = ("collection", "values", "k", "ef", "cold", "nprobe", "filter", "text", "fusion", "filter_expr", "rescore", "fuzzy")
     class FilterEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
@@ -317,6 +336,7 @@ class SearchVectorsRequest(_message.Message):
     FUSION_FIELD_NUMBER: _ClassVar[int]
     FILTER_EXPR_FIELD_NUMBER: _ClassVar[int]
     RESCORE_FIELD_NUMBER: _ClassVar[int]
+    FUZZY_FIELD_NUMBER: _ClassVar[int]
     collection: str
     values: _containers.RepeatedScalarFieldContainer[float]
     k: int
@@ -328,7 +348,8 @@ class SearchVectorsRequest(_message.Message):
     fusion: Fusion
     filter_expr: FilterExpr
     rescore: int
-    def __init__(self, collection: _Optional[str] = ..., values: _Optional[_Iterable[float]] = ..., k: _Optional[int] = ..., ef: _Optional[int] = ..., cold: bool = ..., nprobe: _Optional[int] = ..., filter: _Optional[_Mapping[str, str]] = ..., text: _Optional[str] = ..., fusion: _Optional[_Union[Fusion, _Mapping]] = ..., filter_expr: _Optional[_Union[FilterExpr, _Mapping]] = ..., rescore: _Optional[int] = ...) -> None: ...
+    fuzzy: bool
+    def __init__(self, collection: _Optional[str] = ..., values: _Optional[_Iterable[float]] = ..., k: _Optional[int] = ..., ef: _Optional[int] = ..., cold: bool = ..., nprobe: _Optional[int] = ..., filter: _Optional[_Mapping[str, str]] = ..., text: _Optional[str] = ..., fusion: _Optional[_Union[Fusion, _Mapping]] = ..., filter_expr: _Optional[_Union[FilterExpr, _Mapping]] = ..., rescore: _Optional[int] = ..., fuzzy: bool = ...) -> None: ...
 
 class FilterExpr(_message.Message):
     __slots__ = ("cond",)
@@ -427,7 +448,92 @@ class SearchHit(_message.Message):
     def __init__(self, id: _Optional[str] = ..., distance: _Optional[float] = ..., metadata: _Optional[_Mapping[str, str]] = ..., score: _Optional[float] = ..., typed_metadata: _Optional[_Mapping[str, TypedValue]] = ...) -> None: ...
 
 class SearchVectorsResponse(_message.Message):
-    __slots__ = ("hits",)
+    __slots__ = ("hits", "corrections")
+    class CorrectionsEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: str
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
     HITS_FIELD_NUMBER: _ClassVar[int]
+    CORRECTIONS_FIELD_NUMBER: _ClassVar[int]
     hits: _containers.RepeatedCompositeFieldContainer[SearchHit]
-    def __init__(self, hits: _Optional[_Iterable[_Union[SearchHit, _Mapping]]] = ...) -> None: ...
+    corrections: _containers.ScalarMap[str, str]
+    def __init__(self, hits: _Optional[_Iterable[_Union[SearchHit, _Mapping]]] = ..., corrections: _Optional[_Mapping[str, str]] = ...) -> None: ...
+
+class FacetsRequest(_message.Message):
+    __slots__ = ("collection", "filter_expr", "facets")
+    COLLECTION_FIELD_NUMBER: _ClassVar[int]
+    FILTER_EXPR_FIELD_NUMBER: _ClassVar[int]
+    FACETS_FIELD_NUMBER: _ClassVar[int]
+    collection: str
+    filter_expr: FilterExpr
+    facets: _containers.RepeatedCompositeFieldContainer[FacetSpec]
+    def __init__(self, collection: _Optional[str] = ..., filter_expr: _Optional[_Union[FilterExpr, _Mapping]] = ..., facets: _Optional[_Iterable[_Union[FacetSpec, _Mapping]]] = ...) -> None: ...
+
+class FacetSpec(_message.Message):
+    __slots__ = ("field", "name", "limit", "ranges", "own_filter", "filter_expr")
+    FIELD_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    LIMIT_FIELD_NUMBER: _ClassVar[int]
+    RANGES_FIELD_NUMBER: _ClassVar[int]
+    OWN_FILTER_FIELD_NUMBER: _ClassVar[int]
+    FILTER_EXPR_FIELD_NUMBER: _ClassVar[int]
+    field: str
+    name: str
+    limit: int
+    ranges: _containers.RepeatedCompositeFieldContainer[FacetRange]
+    own_filter: bool
+    filter_expr: FilterExpr
+    def __init__(self, field: _Optional[str] = ..., name: _Optional[str] = ..., limit: _Optional[int] = ..., ranges: _Optional[_Iterable[_Union[FacetRange, _Mapping]]] = ..., own_filter: bool = ..., filter_expr: _Optional[_Union[FilterExpr, _Mapping]] = ...) -> None: ...
+
+class FacetRange(_message.Message):
+    __slots__ = ("to",)
+    FROM_FIELD_NUMBER: _ClassVar[int]
+    TO_FIELD_NUMBER: _ClassVar[int]
+    to: float
+    def __init__(self, to: _Optional[float] = ..., **kwargs) -> None: ...
+
+class FacetsResponse(_message.Message):
+    __slots__ = ("total", "facets")
+    TOTAL_FIELD_NUMBER: _ClassVar[int]
+    FACETS_FIELD_NUMBER: _ClassVar[int]
+    total: int
+    facets: _containers.RepeatedCompositeFieldContainer[FacetResult]
+    def __init__(self, total: _Optional[int] = ..., facets: _Optional[_Iterable[_Union[FacetResult, _Mapping]]] = ...) -> None: ...
+
+class FacetResult(_message.Message):
+    __slots__ = ("name", "field", "matched", "missing", "distinct", "values", "ranges")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    FIELD_FIELD_NUMBER: _ClassVar[int]
+    MATCHED_FIELD_NUMBER: _ClassVar[int]
+    MISSING_FIELD_NUMBER: _ClassVar[int]
+    DISTINCT_FIELD_NUMBER: _ClassVar[int]
+    VALUES_FIELD_NUMBER: _ClassVar[int]
+    RANGES_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    field: str
+    matched: int
+    missing: int
+    distinct: int
+    values: _containers.RepeatedCompositeFieldContainer[FacetValue]
+    ranges: _containers.RepeatedCompositeFieldContainer[FacetRangeCount]
+    def __init__(self, name: _Optional[str] = ..., field: _Optional[str] = ..., matched: _Optional[int] = ..., missing: _Optional[int] = ..., distinct: _Optional[int] = ..., values: _Optional[_Iterable[_Union[FacetValue, _Mapping]]] = ..., ranges: _Optional[_Iterable[_Union[FacetRangeCount, _Mapping]]] = ...) -> None: ...
+
+class FacetValue(_message.Message):
+    __slots__ = ("value", "count")
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    COUNT_FIELD_NUMBER: _ClassVar[int]
+    value: TypedValue
+    count: int
+    def __init__(self, value: _Optional[_Union[TypedValue, _Mapping]] = ..., count: _Optional[int] = ...) -> None: ...
+
+class FacetRangeCount(_message.Message):
+    __slots__ = ("to", "count")
+    FROM_FIELD_NUMBER: _ClassVar[int]
+    TO_FIELD_NUMBER: _ClassVar[int]
+    COUNT_FIELD_NUMBER: _ClassVar[int]
+    to: float
+    count: int
+    def __init__(self, to: _Optional[float] = ..., count: _Optional[int] = ..., **kwargs) -> None: ...

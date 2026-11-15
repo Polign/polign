@@ -137,6 +137,62 @@ filter={
 }
 ```
 
+`fuzzy=True` makes a text search tolerate typos: each query word that no
+document contains is replaced by the closest indexed word, and the returned
+list says what was replaced. Words the index holds are never changed.
+
+```python
+hits = client.search("products", text="telvison", k=10, fuzzy=True)
+hits.corrections        # {"telvison": "television"}; {} when nothing changed
+```
+
+### Facet counts
+
+`facets` counts metadata values over every record a filter matches: all of
+them, not the top hits of a search. It is what a results page shows beside
+its hits.
+
+```python
+from polign import Facet
+
+counts = client.facets(
+    "products",
+    [
+        "brand",                                           # 100 most common values
+        Facet("price", ranges=[(None, 50), (50, 200), (200, None)]),
+        Facet("category", name="categories", filter={"in_stock": True}),
+    ],
+    filter={"category": "tv", "in_stock": True},
+)
+counts.total                       # records the filter matches
+counts["brand"].values             # [FacetValue(value="acme", count=96), ...]
+counts["brand"].distinct           # distinct brands before the limit
+counts["price"].ranges             # [FacetRangeCount(start=None, end=50, count=12), ...]
+counts["categories"].matched       # records that facet's own filter selected
+```
+
+A range includes its lower bound and excludes its upper. A facet's own
+`filter` replaces the request filter for that facet, so the page can keep
+showing the other categories while one is selected; `own_filter=True` with no
+filter counts every record.
+
+### A separate patch per record
+
+`update_metadata` applies one patch to many records. `patch_metadata` gives
+each record its own, which is the shape of a price or inventory feed:
+
+```python
+from polign import MetadataPatch
+
+client.patch_metadata("products", [
+    MetadataPatch("sku1", set={"price": 19.99, "in_stock": True}),
+    {"id": "sku2", "set": {"price": 5.49}, "unset": ["promo"]},
+])                                 # ["sku1", "sku2"]; unknown ids are omitted
+```
+
+`facets`, `patch_metadata` and `fuzzy` work on both transports and need a
+polign_db server newer than 0.15.0.
+
 ## Collection management
 
 Collections are auto-created on first put, so most applications never touch

@@ -71,3 +71,86 @@ def test_list_metadata_round_trips_through_wire_form():
         _metadata_to_pb({"k": [["nested"]]})
     with pytest.raises(TypeError, match="string, number, bool"):
         _metadata_to_pb({"k": [None]})
+
+
+class _RetailStub:
+    """Records the request of each retail-round call and answers a canned response."""
+
+    def __init__(self):
+        self.requests = {}
+
+    def Facets(self, request, **_kwargs):
+        from polign._pb import vectordb_pb2 as pb
+
+        self.requests["facets"] = request
+        resp = pb.FacetsResponse(total=2)
+        brand = resp.facets.add(name="brand", field="brand", matched=2, distinct=1)
+        brand.values.add(value=pb.TypedValue(str="acme"), count=2)
+        price = resp.facets.add(name="price", field="price", matched=2, missing=1)
+        price.ranges.add(to=500, count=1)
+        high = price.ranges.add(count=0)
+        setattr(high, "from", 500)
+        return resp
+
+    def UpdateMetadata(self, request, **_kwargs):
+        from polign._pb import vectordb_pb2 as pb
+
+        self.requests["update"] = request
+        return pb.UpdateMetadataResponse(ids=["p1", "p2"])
+
+    def SearchVectors(self, request, **_kwargs):
+        from polign._pb import vectordb_pb2 as pb
+
+        self.requests["search"] = request
+        resp = pb.SearchVectorsResponse()
+        resp.hits.add(id="tv", score=1.5)
+        resp.corrections["telvison"] = "television"
+        return resp
+
+
+def test_grpc_facets_patch_and_fuzzy_match_the_http_client():
+    import polign
+
+    stub = _RetailStub()
+    client = _client_with_stub(stub)
+
+    counts = client.facets(
+        "shop",
+        [
+            "brand",
+            polign.Facet("price", ranges=[(None, 500), (500, None)]),
+            polign.Facet("category", name="categories", own_filter=True),
+            polign.Facet("brand", name="stocked", filter={"in_stock": True}),
+        ],
+        filter={"category": "tv"},
+    )
+    req = stub.requests["facets"]
+    assert req.collection == "shop" and req.filter_expr.cond.key == "category"
+    assert [f.field for f in req.facets] == ["brand", "price", "category", "brand"]
+    assert not req.facets[0].own_filter
+    low, high = req.facets[1].ranges
+    assert not low.HasField("from") and low.to == 500
+    assert getattr(high, "from") == 500 and not high.HasField("to")
+    assert req.facets[2].own_filter and not req.facets[2].HasField("filter_expr")
+    assert req.facets[3].own_filter and req.facets[3].filter_expr.cond.key == "in_stock"
+    assert counts.total == 2
+    assert counts["brand"].values == [polign.FacetValue("acme", 2)]
+    assert counts["brand"].distinct == 1 and counts["price"].distinct is None
+    assert counts["price"].ranges == [
+        polign.FacetRangeCount(None, 500, 1),
+        polign.FacetRangeCount(500, None, 0),
+    ]
+
+    ids = client.patch_metadata(
+        "shop",
+        [polign.MetadataPatch("p1", set={"price": 19.99}), {"id": "p2", "unset": ["promo"]}],
+    )
+    req = stub.requests["update"]
+    assert ids == ["p1", "p2"] and not req.ids
+    assert req.updates[0].id == "p1" and req.updates[0].set["price"].number == 19.99
+    assert list(req.updates[1].unset) == ["promo"]
+
+    hits = client.search("docs", text="telvison", k=3, fuzzy=True)
+    assert stub.requests["search"].fuzzy
+    assert [h.id for h in hits] == ["tv"]
+    assert hits.corrections == {"telvison": "television"}

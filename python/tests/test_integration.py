@@ -449,3 +449,85 @@ def test_http_grpc_strict_filter_parity(server):
     finally:
         http.close()
         grpc.close()
+
+
+# -- facets, per-record patches, fuzzy search --------------------------------
+
+
+def _require_retail_round(server):
+    # Public CI also runs against the latest published binary. Skip only
+    # releases known to predate these operations; dev builds must pass.
+    release = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", server["version"])
+    if release and tuple(map(int, release.groups())) <= (0, 15, 0):
+        pytest.skip("server 0.15.0 and earlier have no facets, per-record patches or fuzzy search")
+
+
+def test_facets_and_per_record_patches(client, server, request):
+    _require_retail_round(server)
+    import polign
+
+    coll = f"retail-{request.node.callspec.id}"
+    client.put_many(coll, [
+        polign.Vector("p1", [1.0, 0.0], {"brand": "acme", "category": "tv", "price": 499, "tags": ["sale", "new"]}),
+        polign.Vector("p2", [1.0, 0.0], {"brand": "acme", "category": "tv", "price": 899}),
+        polign.Vector("p3", [0.0, 1.0], {"brand": "bolt", "category": "audio", "price": 49}),
+    ])
+    spec = [
+        "brand",
+        "tags",
+        polign.Facet("price", ranges=[(None, 500), (500, 1000), (1000, None)]),
+        polign.Facet("category", name="categories", own_filter=True),
+    ]
+    counts = client.facets(coll, spec, filter={"category": "tv"})
+    assert counts.total == 2
+    assert counts["brand"].values == [polign.FacetValue("acme", 2)]
+    assert counts["tags"].missing == 1
+    assert sorted((v.value, v.count) for v in counts["tags"].values) == [("new", 1), ("sale", 1)]
+    assert [r.count for r in counts["price"].ranges] == [1, 1, 0]
+    assert counts["price"].ranges[0].start is None and counts["price"].ranges[2].end is None
+    assert counts["price"].distinct is None
+    assert counts["categories"].matched == 3
+    assert [(v.value, v.count) for v in counts["categories"].values] == [("tv", 2), ("audio", 1)]
+
+    # A feed: each product gets its own values in one request.
+    ids = client.patch_metadata(coll, [
+        polign.MetadataPatch("p1", set={"price": 1200}),
+        {"id": "p2", "set": {"price": 450}, "unset": ["brand"]},
+        {"id": "missing", "set": {"price": 1}},
+    ])
+    assert ids == ["p1", "p2"]
+    counts = client.facets(coll, spec, filter={"category": "tv"})
+    assert [r.count for r in counts["price"].ranges] == [1, 0, 1]
+    assert counts["brand"].missing == 1 and counts["brand"].values == [polign.FacetValue("acme", 1)]
+
+
+@pytest.mark.parametrize("server", ["store"], indirect=True)
+def test_fuzzy_search_corrects_a_typo(client, server, request):
+    _require_retail_round(server)
+    coll = f"fuzzy-{request.node.callspec.id}"
+    import polign
+
+    # Reach the training threshold instead of waiting for the server's 30s
+    # idle-training delay for a tiny collection.
+    client.put_many(
+        coll,
+        [polign.Vector(f"f{i}", [float(i), float(i % 7)], {"text": f"filler item {i}"}) for i in range(1000)],
+    )
+    client.put(coll, "tv", [1.0, 0.0], {"text": "sony television oled"})
+    client.put(coll, "kb", [0.0, 1.0], {"text": "wireless keyboard"})
+    # Text is indexed when the segment persists; wait for the exact word.
+
+    deadline = time.monotonic() + 30
+    while True:
+        try:
+            if client.search(coll, text="television", k=5):
+                break
+        except polign.NotFoundError:
+            pass  # nothing persisted yet
+        assert time.monotonic() < deadline, "text never became searchable"
+        time.sleep(0.2)
+    hits = client.search(coll, text="telvison", k=5, fuzzy=True)
+    assert [h.id for h in hits] == ["tv"]
+    assert hits.corrections == {"telvison": "television"}
+    plain = client.search(coll, text="telvison", k=5)
+    assert plain == [] and plain.corrections == {}

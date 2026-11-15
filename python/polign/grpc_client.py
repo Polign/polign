@@ -7,7 +7,7 @@ client (proto package polign.v1).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 from . import errors
 from .types import (
@@ -15,8 +15,15 @@ from .types import (
     CollectionDescription,
     CollectionInfo,
     DeleteResult,
+    Facet,
+    FacetCounts,
+    FacetRangeCount,
+    FacetResult,
+    FacetValue,
     Fusion,
     Hit,
+    HitList,
+    MetadataPatch,
     MetaValue,
     Vector,
     VectorPage,
@@ -31,6 +38,7 @@ except ImportError as _e:  # pragma: no cover
     ) from _e
 
 from ._filter import filter_expr_from_dict
+from .client import _as_facet, _patch_fields
 from ._pb import vectordb_pb2 as pb
 from ._pb import vectordb_pb2_grpc as pb_grpc
 
@@ -185,6 +193,66 @@ class GrpcClient:
         resp = self._call(self._stub.UpdateMetadata, req)
         return list(resp.ids)
 
+    def patch_metadata(
+        self, collection: str, updates: Sequence[Union[MetadataPatch, Dict[str, Any]]]
+    ) -> List[str]:
+        """Apply a separate metadata patch to each record in one request; see
+        the HTTP client's patch_metadata for the contract."""
+        req = pb.UpdateMetadataRequest(collection=collection)
+        for update in updates:
+            id, set_, unset = _patch_fields(update)
+            patch = req.updates.add(id=id)
+            for k, v in (set_ or {}).items():
+                patch.set[k].CopyFrom(_value_to_pb(k, v, in_list=False))
+            patch.unset.extend(unset or [])
+        resp = self._call(self._stub.UpdateMetadata, req)
+        return list(resp.ids)
+
+    def facets(
+        self,
+        collection: str,
+        facets: Sequence[Union[Facet, str]],
+        *,
+        filter: Optional[Dict[str, Any]] = None,
+    ) -> FacetCounts:
+        """Count metadata values over every record ``filter`` matches; see
+        the HTTP client's facets for the contract."""
+        req = pb.FacetsRequest(collection=collection, filter_expr=filter_expr_from_dict(filter))
+        for facet in facets:
+            f = _as_facet(facet)
+            spec = req.facets.add(field=f.field, name=f.name, limit=int(f.limit))
+            for start, end in f.ranges or ():
+                r = spec.ranges.add()
+                if start is not None:
+                    setattr(r, "from", float(start))
+                if end is not None:
+                    r.to = float(end)
+            if f.filter:
+                spec.own_filter = True
+                spec.filter_expr.CopyFrom(filter_expr_from_dict(f.filter))
+            elif f.own_filter:
+                spec.own_filter = True
+        resp = self._call(self._stub.Facets, req)
+        out = FacetCounts(total=resp.total)
+        for r in resp.facets:
+            ranged = len(r.ranges) > 0
+            out.facets[r.name] = FacetResult(
+                field=r.field,
+                matched=r.matched,
+                missing=r.missing,
+                distinct=None if ranged else r.distinct,
+                values=[FacetValue(value=_value_from_pb(v.value), count=v.count) for v in r.values],
+                ranges=[
+                    FacetRangeCount(
+                        start=getattr(g, "from") if g.HasField("from") else None,
+                        end=g.to if g.HasField("to") else None,
+                        count=g.count,
+                    )
+                    for g in r.ranges
+                ],
+            )
+        return out
+
     def delete_many(
         self,
         collection: str,
@@ -242,8 +310,10 @@ class GrpcClient:
         fusion: Optional[Fusion] = None,
         rescore: int = 0,
         typed_metadata: bool = False,
-    ) -> List[Hit]:
-        """Nearest-neighbour / text / hybrid search (same semantics as HTTP).
+        fuzzy: bool = False,
+    ) -> HitList:
+        """Nearest-neighbour / text / hybrid search (same semantics as HTTP,
+        including ``fuzzy`` and the returned list's ``corrections``).
 
         ``filter`` takes the same dict language as the HTTP client:
         ``{"key": "value"}`` is equality (AND across
@@ -265,21 +335,25 @@ class GrpcClient:
             filter_expr=filter_expr_from_dict(filter),
             text=text or "",
             rescore=rescore,
+            fuzzy=fuzzy,
         )
         if fusion is not None:
             req.fusion.method = fusion.method
             req.fusion.alpha = fusion.alpha
             req.fusion.rrf_k = fusion.rrf_k
         resp = self._call(self._stub.SearchVectors, req)
-        return [
-            Hit(
-                id=h.id,
-                distance=h.distance,
-                score=h.score,
-                metadata=_metadata_from_pb(h, typed_metadata),
-            )
-            for h in resp.hits
-        ]
+        return HitList(
+            (
+                Hit(
+                    id=h.id,
+                    distance=h.distance,
+                    score=h.score,
+                    metadata=_metadata_from_pb(h, typed_metadata),
+                )
+                for h in resp.hits
+            ),
+            corrections=dict(resp.corrections),
+        )
 
     # -- collection admin (bring-your-own-bucket; server needs -byo-store) --
 

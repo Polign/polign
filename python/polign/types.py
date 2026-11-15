@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 # MetaValue is one typed metadata scalar. Numbers are stored as numbers and
 # booleans as booleans; by default the server *returns* every value as a
@@ -42,6 +42,106 @@ class Hit:
     distance: float
     score: float = 0.0
     metadata: Dict[str, MetaValue] = field(default_factory=dict)
+
+
+class HitList(List[Hit]):
+    """The hits of a search: a list of :class:`Hit`, plus what a fuzzy search
+    corrected.
+
+    ``corrections`` maps each query word that ``fuzzy=True`` replaced to the
+    word it searched for instead. It is empty when nothing was replaced, and
+    always empty without ``fuzzy``.
+    """
+
+    corrections: Dict[str, str]
+
+    def __init__(self, hits=(), corrections: Optional[Dict[str, str]] = None):
+        super().__init__(hits)
+        self.corrections = dict(corrections or {})
+
+
+@dataclass
+class MetadataPatch:
+    """One record's patch in :meth:`Client.patch_metadata`: keys in ``set``
+    are written, keys in ``unset`` removed, every other key kept."""
+
+    id: str
+    set: Optional[Dict[str, MetaValue]] = None
+    unset: Optional[Sequence[str]] = None
+
+
+@dataclass
+class Facet:
+    """A request for the counts of one metadata field.
+
+    Without ``ranges`` the answer is one count per distinct value, highest
+    first, cut to ``limit`` (0 means the server default of 100; at most
+    1000). With ``ranges``, a list of ``(from, to)`` pairs where either bound
+    may be ``None``, the answer is one count per range for numeric values:
+    ``from`` is inclusive, ``to`` exclusive.
+
+    A facet counts the records the request's filter matches. Give it its own
+    ``filter`` to replace the request filter for this facet only, which is
+    how a results page keeps showing the other brands while one is selected.
+    ``own_filter=True`` with no ``filter`` counts every record. ``name`` keys
+    the facet in the result and defaults to ``field``.
+    """
+
+    field: str
+    name: str = ""
+    limit: int = 0
+    ranges: Optional[Sequence[Tuple[Optional[float], Optional[float]]]] = None
+    filter: Optional[Dict[str, Any]] = None
+    own_filter: bool = False
+
+
+@dataclass
+class FacetValue:
+    """One distinct value and the number of records holding it."""
+
+    value: MetaValue
+    count: int
+
+
+@dataclass
+class FacetRangeCount:
+    """One requested range and the number of records in it. ``start`` is the
+    range's inclusive lower bound and ``end`` its exclusive upper bound;
+    ``None`` is an open side."""
+
+    start: Optional[float]
+    end: Optional[float]
+    count: int
+
+
+@dataclass
+class FacetResult:
+    """The counts of one facet.
+
+    ``matched`` is how many records the facet's filter selected and
+    ``missing`` how many of those do not carry the field. ``distinct`` is the
+    number of distinct values before ``limit`` cut the list; it is ``None``
+    for a range facet.
+    """
+
+    field: str
+    matched: int = 0
+    missing: int = 0
+    distinct: Optional[int] = None
+    values: List[FacetValue] = field(default_factory=list)
+    ranges: List[FacetRangeCount] = field(default_factory=list)
+
+
+@dataclass
+class FacetCounts:
+    """The answer to a facets request. ``total`` is the number of records the
+    request filter matches; ``facets`` maps each facet's name to its counts."""
+
+    total: int = 0
+    facets: Dict[str, FacetResult] = field(default_factory=dict)
+
+    def __getitem__(self, name: str) -> FacetResult:
+        return self.facets[name]
 
 
 @dataclass
