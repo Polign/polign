@@ -64,6 +64,10 @@ class FakeAgent:
         self.released = 0
 
     def record_turn(self, role, content, name=None, message_id=None, brief=None):
+        # As Recall does: a message id already recorded answers with that turn.
+        for turn in self.client.turns:
+            if message_id and turn.message_id == message_id:
+                return turn
         turn = Turn(seq=len(self.client.turns) + 1, role=role, content=content, name=name or "",
                     message_id=message_id or "", brief=brief or "")
         self.client.turns.append(turn)
@@ -98,12 +102,17 @@ class FakeAgent:
         self.client.pointers[name] = pointer
         return pointer
 
-    def begin_action(self, tool, class_, args=None):
+    def begin_action(self, tool, class_, args=None, call_id=None):
+        # As Recall does: a call id already begun answers with that action.
+        for action in self.client.actions.values():
+            if call_id and action.call_id == call_id:
+                return action
         if args is not None and not isinstance(args, str):
             args = json.dumps(args, sort_keys=True, default=str)
         seq = len(self.client.actions) + 1
         key = hashlib.sha256(f"{self.agent_id}:{seq}".encode()).hexdigest()[:32]
-        action = Action(seq=seq, tool=tool, class_=class_, key=key, status="started", args=args or "")
+        action = Action(seq=seq, tool=tool, class_=class_, key=key, status="started", args=args or "",
+                        call_id=call_id or "")
         self.client.actions[seq] = action
         return action
 

@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from typing import Any
+from uuid import uuid4
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
@@ -18,6 +19,9 @@ class ScriptedChatModel(BaseChatModel):
 
     steps: list[Any]
     _inputs: list[list[BaseMessage]] = PrivateAttr(default_factory=list)
+    # Message and tool call ids are unique across models, as a real model's
+    # are: Recall treats a repeated id as the message already recorded.
+    _run: str = PrivateAttr(default_factory=lambda: uuid4().hex[:8])
 
     def __init__(self, steps: Sequence[str | tuple[str, dict]], **kwargs: Any) -> None:
         super().__init__(steps=list(steps), **kwargs)
@@ -38,11 +42,11 @@ class ScriptedChatModel(BaseChatModel):
         step = self.steps.pop(0) if self.steps else "Okay."
         n = len(self._inputs)
         if isinstance(step, str):
-            message = AIMessage(content=step, id=f"ai-{n}")
+            message = AIMessage(content=step, id=f"ai-{self._run}-{n}")
         else:
             name, args = step
-            message = AIMessage(content="", id=f"ai-{n}",
-                                tool_calls=[{"name": name, "args": args, "id": f"call-{n}", "type": "tool_call"}])
+            message = AIMessage(content="", id=f"ai-{self._run}-{n}",
+                                tool_calls=[{"name": name, "args": args, "id": f"call-{self._run}-{n}", "type": "tool_call"}])
         return ChatResult(generations=[ChatGeneration(message=message)])
 
 

@@ -188,6 +188,13 @@ the call as abandoned, because LangGraph runs the tool again from the start
 when the graph resumes. Recall never runs a tool on its own: the re-run of an
 idempotent call is this package calling your tool, with its key.
 
+A call from the model is recorded under its tool call id. When the same call
+runs again, because a checkpointed graph replays its tool node after a crash
+or a process was restored from an earlier snapshot, a call that already
+finished is answered from its recorded result and the tool does not run. A
+call that failed or was abandoned runs again as a new attempt. This needs
+polign-recall 0.26.0 or later.
+
 ## The tools
 
 | Tool | What the model uses it for |

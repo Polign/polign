@@ -132,3 +132,45 @@ def test_a_crash_in_the_middle_of_tool_calls_is_settled_on_resume(data):
     # The email went out once; the invoice was saved once, under its key.
     assert sent == ["Your car is ready"]
     assert len(invoices) == 1 and "" not in invoices
+
+
+def test_a_call_run_again_by_a_new_process_is_answered_from_its_record(data):
+    # The same tool call, run by one process and then again by the next one,
+    # as a checkpointed graph replaying its tool node after a crash does.
+    from langchain_core.tools import tool
+
+    collection = new_collection("lg")
+    agent_id = "replay-" + uuid.uuid4().hex[:6]
+    sent = []
+
+    @tool
+    def send_email(subject: str) -> str:
+        """Send an email."""
+        sent.append(subject)
+        return f"sent {subject}"
+
+    call = {"type": "tool_call", "name": "send_email", "args": {"subject": "Your car is ready"}, "id": "call_live_1"}
+    results = []
+    for _ in range(2):
+        client = connect(data, collection)
+        try:
+            with RecallResume(agent_id, client=client) as resume:
+                [send] = resume.durable([send_email], {"send_email": "external"})
+                results.append(send.invoke(call).content)
+        finally:
+            client.close()
+    assert sent == ["Your car is ready"]
+    assert results == ["sent Your car is ready"] * 2
+
+    client = connect(data, collection)
+    try:
+        agent = client.resume(agent_id)
+        try:
+            tool_turns = [t for t in agent.recent_turns(50) if t.role == "tool"]
+            assert [t.content for t in tool_turns] == ["sent Your car is ready"]
+            assert not agent.context.pending_actions
+            assert agent.position.actions == 1  # one action for the two runs
+        finally:
+            agent.release()
+    finally:
+        client.close()

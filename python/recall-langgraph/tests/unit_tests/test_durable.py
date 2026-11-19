@@ -274,3 +274,40 @@ def test_an_external_tool_gets_the_key_to_record_and_open_actions_lists_what_is_
     # The key a resolver will look the message up by reached the tool.
     assert recorded == [action.key] and action.key
     assert [a.tool for a in resume.open_actions()] == ["send_sms"]
+
+
+def tool_call(name, args, id):
+    return {"type": "tool_call", "name": name, "args": args, "id": id}
+
+
+def test_a_call_run_again_is_answered_from_its_record(client, shop):
+    # A checkpointed graph replays its tool node, or a process restored from
+    # an earlier snapshot runs the call again: the tool call id is the same.
+    with RecallResume("shop-1", client=client) as resume:
+        send = resume.durable(shop.tools(), CLASSES)[2]
+        call = tool_call("send_email", {"to": "maria@example.com", "subject": "Your car is ready"}, "call_7")
+        first = send.invoke(call)
+        again = send.invoke(call)
+    assert shop.sent == ["Your car is ready"]  # sent once
+    assert again.content == first.content == "sent" and again.tool_call_id == "call_7"
+    assert [(a.call_id, a.status) for a in client.actions.values()] == [("call_7", "done")]
+    assert [t.content for t in client.turns if t.role == "tool"] == ["sent"]  # one turn
+
+
+async def test_a_call_run_again_is_answered_from_its_record_async(client, shop):
+    async with RecallResume("shop-1", client=client) as resume:
+        save = resume.durable(shop.tools(), CLASSES)[1]
+        call = tool_call("save_invoice", {"invoice": "inv-9", "total": 90}, "call_9")
+        await save.ainvoke(call)
+        again = await save.ainvoke(call)
+    assert shop.writes == 1 and again.content == "saved inv-9"
+
+
+def test_a_failed_call_run_again_is_a_new_attempt(client, shop):
+    with RecallResume("shop-1", client=client) as resume:
+        charge = resume.durable(shop.tools(), CLASSES)[3]
+        call = tool_call("charge_card", {"amount": 410}, "call_3")
+        charge.invoke(call)
+        charge.invoke(call)
+    assert [(a.call_id, a.status) for a in client.actions.values()] == [
+        ("call_3", "failed"), ("call_3#2", "failed")]

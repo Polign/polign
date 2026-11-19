@@ -32,6 +32,10 @@ KEY_ARG = "idempotency_key"
 #: tell the ToolMessage the graph adds afterwards from a new message.
 TOOL_TURN_PREFIX = "tool-call:"
 
+#: How many times one tool call is begun again after failing or being
+#: abandoned before the latest attempt is used as it is.
+MAX_ATTEMPTS = 100
+
 Resolver = Callable[[Action], "ActionEnd | None"]
 
 
@@ -62,6 +66,8 @@ class DurableTool(BaseTool):
 
     def invoke(self, input: Any, config: RunnableConfig | None = None, **kwargs: Any) -> Any:
         action, call_id, input = self._begin(input)
+        if action.status == "done":
+            return self._recorded(action, call_id)
         try:
             out = self.inner.invoke(input, config, **kwargs)
         except Exception as exc:
@@ -71,6 +77,8 @@ class DurableTool(BaseTool):
 
     async def ainvoke(self, input: Any, config: RunnableConfig | None = None, **kwargs: Any) -> Any:
         action, call_id, input = await asyncio.to_thread(self._begin, input)
+        if action.status == "done":
+            return await asyncio.to_thread(self._recorded, action, call_id)
         try:
             out = await self.inner.ainvoke(input, config, **kwargs)
         except Exception as exc:
@@ -84,15 +92,43 @@ class DurableTool(BaseTool):
     # than a closed action whose result the next instance never sees, which
     # would invite it to make the call again.
 
+    # A call from the model carries the tool call's id, and the action is
+    # begun under it. When LangGraph runs the same call again (a checkpointed
+    # graph replaying its tool node after a crash, or a process restored from
+    # an earlier snapshot), begin_action answers with the action already
+    # recorded instead of a new one: one that finished is answered from its
+    # recorded result without running the tool, and one still open is run and
+    # closed as before. One that failed or was abandoned is a new attempt,
+    # under the id with "#2", "#3" and so on after it.
+
     def _begin(self, input: Any) -> tuple[Action, str | None, Any]:
         is_call = isinstance(input, Mapping) and input.get("type") == "tool_call"
         args = dict(input.get("args") or {}) if is_call else (dict(input) if isinstance(input, Mapping) else {"input": input})
         shown = {k: v for k, v in args.items() if k != KEY_ARG}
-        action = self.resume.agent.begin_action(self.name, self.action_class, shown)
+        call_id = (input.get("id") or None) if is_call else None
+        action = self.resume.agent.begin_action(self.name, self.action_class, shown, call_id=call_id)
+        attempt = 1
+        while call_id and action.status in ("failed", "abandoned") and attempt < MAX_ATTEMPTS:
+            attempt += 1
+            action = self.resume.agent.begin_action(self.name, self.action_class, shown,
+                                                    call_id=f"{call_id}#{attempt}")
         if takes_key(self.inner):
             args[KEY_ARG] = action.key
             input = {**input, "args": args} if is_call else args
-        return action, (input.get("id") if is_call else None), input
+        return action, call_id, input
+
+    def _recorded(self, action: Action, call_id: str | None) -> Any:
+        """The answer of a call that already finished, from its record."""
+        text = action.result
+        if action.result_ref:
+            text = self.resume.agent.fetch_output(action.result_ref).content
+        if call_id:
+            # The result's turn was written before the action closed; this
+            # repeats it under the same message id, which Recall answers with
+            # the turn already there.
+            self.resume.record_tool_result(call_id, self.name, text)
+            return ToolMessage(content=text, name=self.name, tool_call_id=call_id)
+        return text
 
     # Only an ordinary exception is the tool saying it failed. Cancellation or
     # an interrupt says nothing about whether the call took effect, so the
