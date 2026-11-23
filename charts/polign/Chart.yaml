@@ -2,8 +2,8 @@ apiVersion: v2
 name: polign
 description: Polign vector database backed by your object-store bucket
 type: application
-version: 0.2.0
-appVersion: "0.6.6"
+version: 0.3.0
+appVersion: "0.17.0"
 kubeVersion: ">=1.30.0-0"
 home: https://polign.com
 icon: https://polign.com/assets/favicon.svg
@@ -22,18 +22,12 @@ annotations:
   artifacthub.io/prerelease: "true"
   artifacthub.io/images: |
     - name: polign-server
-      image: ghcr.io/polign/polign-server:0.6.6
+      image: ghcr.io/polign/polign-server:0.17.0
   artifacthub.io/links: |
     - name: Chart documentation
       url: https://github.com/Polign/polign/blob/main/charts/polign/README.md
     - name: Support
       url: https://github.com/Polign/polign/issues
   artifacthub.io/changes: |
-    - kind: added
-      description: Supply an API key from a Secret and the server registers it at startup, so installing needs no key minted by hand afterwards
-    - kind: added
-      description: Configurable startup probe budget, so a store whose restore runs long does not restart into the same replay for ever
-    - kind: added
-      description: Artifact Hub metadata, so the chart is discoverable from a vendor-neutral index
-    - kind: added
-      description: Sigstore keyless signature published beside the chart in the registry and verified at release
+    - kind: changed
+      description: Installs Polign 0.17.0 by default, up from 0.6.6

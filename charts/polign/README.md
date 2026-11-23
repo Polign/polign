@@ -15,7 +15,7 @@ and two random values, so any source of randomness makes one.
 kubectl create namespace polign
 kubectl -n polign create secret generic polign-key \
   --from-literal=api-key="plgn_$(openssl rand -hex 8)_$(openssl rand -hex 32)"
-helm install polign oci://ghcr.io/polign/charts/polign --version 0.2.0 \
+helm install polign oci://ghcr.io/polign/charts/polign --version 0.3.0 \
   --namespace polign --set store.claim.create=true --set auth.existingSecret=polign-key --wait
 ```
 
@@ -71,7 +71,7 @@ Then install, naming that Secret. The server registers the key as it starts:
 
 ```sh
 helm install polign oci://ghcr.io/polign/charts/polign \
-  --version 0.2.0 --namespace polign -f polign-values.yaml \
+  --version 0.3.0 --namespace polign -f polign-values.yaml \
   --set auth.existingSecret=polign-key --wait --timeout 10m
 ```
 
@@ -156,7 +156,7 @@ Pin an image version or `image.digest`. To upgrade:
 
 ```sh
 helm upgrade polign oci://ghcr.io/polign/charts/polign \
-  --version 0.2.0 --namespace polign -f polign-values.yaml --wait --timeout 10m
+  --version 0.3.0 --namespace polign -f polign-values.yaml --wait --timeout 10m
 ```
 
 Uninstalling the chart deletes its Deployment, Service, and ServiceAccount. It
@@ -184,15 +184,15 @@ catalog, so the same command installs on EKS, GKE, AKS, on-premises, and any
 other conformant cluster. Nothing in the chart is cloud-specific; the store URI
 and the service account annotations are what change. The packaged chart is also
 attached to the
-[chart release](https://github.com/Polign/polign/releases/tag/polign-chart-v0.2.0)
-as `polign-0.2.0.tgz`.
+[chart release](https://github.com/Polign/polign/releases/tag/polign-chart-v0.3.0)
+as `polign-0.3.0.tgz`.
 
 Every published chart is signed with Sigstore, with no key for anyone to hold or
 leak. Verifying is optional but cheap, and the digest is stronger than the tag
 because a tag can be moved later:
 
 ```sh
-cosign verify ghcr.io/polign/charts/polign:0.2.0 \
+cosign verify ghcr.io/polign/charts/polign:0.3.0 \
   --certificate-identity-regexp '^https://github\.com/Polign/polign/\.github/workflows/chart-release\.yml@' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
